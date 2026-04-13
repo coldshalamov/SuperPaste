@@ -1,0 +1,713 @@
+{
+  "format": "superpaste-content-pack",
+  "version": 1,
+  "exportedAtIso": "2026-04-13T13:36:48.240Z",
+  "packName": "Repo starter template pack",
+  "profiles": [
+    {
+      "id": "global-workflow",
+      "name": "Global workflow loadout",
+      "kind": "global",
+      "description": "Portable Bank B workflow moves shared across repos.",
+      "priority": 0,
+      "extendsProfileId": null,
+      "matchRules": [],
+      "assembly": {
+        "style": "markdown",
+        "joiner": "\n\n"
+      },
+      "bankA": {
+        "bankId": "A",
+        "name": "Global context bank",
+        "slots": [
+          {
+            "id": "A0",
+            "bankId": "A",
+            "slotIndex": 0,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A1",
+            "bankId": "A",
+            "slotIndex": 1,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A2",
+            "bankId": "A",
+            "slotIndex": 2,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A3",
+            "bankId": "A",
+            "slotIndex": 3,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A4",
+            "bankId": "A",
+            "slotIndex": 4,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A5",
+            "bankId": "A",
+            "slotIndex": 5,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A6",
+            "bankId": "A",
+            "slotIndex": 6,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A7",
+            "bankId": "A",
+            "slotIndex": 7,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A8",
+            "bankId": "A",
+            "slotIndex": 8,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A9",
+            "bankId": "A",
+            "slotIndex": 9,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          }
+        ]
+      },
+      "bankB": {
+        "bankId": "B",
+        "name": "Workflow bank",
+        "slots": [
+          {
+            "id": "B0",
+            "bankId": "B",
+            "slotIndex": 0,
+            "kind": "workflow",
+            "label": "Patch only",
+            "description": "Tight fix scope and small diffs.",
+            "content": "Patch only what is required for the reported blocker. Keep the blast radius small and avoid broad refactors.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": [
+              "stance"
+            ]
+          },
+          {
+            "id": "B1",
+            "bankId": "B",
+            "slotIndex": 1,
+            "kind": "workflow",
+            "label": "Summarize before edit",
+            "description": "Restate intent before cutting code.",
+            "content": "Summarize the issue and intended fix before editing any files, then proceed with the smallest auditable patch.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B2",
+            "bankId": "B",
+            "slotIndex": 2,
+            "kind": "workflow",
+            "label": "Write tests first",
+            "description": "Bias toward red-green-refactor.",
+            "content": "Add or update focused tests first where practical, use them to lock the behavior, then implement the fix.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B3",
+            "bankId": "B",
+            "slotIndex": 3,
+            "kind": "workflow",
+            "label": "Do not widen auth/security gates",
+            "description": "Preserve security boundaries while fixing behavior.",
+            "content": "Do not widen authentication, authorization, or security gates as part of this change unless explicitly requested.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": [
+              "stance"
+            ]
+          },
+          {
+            "id": "B4",
+            "bankId": "B",
+            "slotIndex": 4,
+            "kind": "workflow",
+            "label": "Output changed files only",
+            "description": "Keep final response terse and audit-friendly.",
+            "content": "In the final response, list the changed files and the highest-signal behavior changes only. Avoid a blow-by-blow changelog.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B5",
+            "bankId": "B",
+            "slotIndex": 5,
+            "kind": "workflow",
+            "label": "Repo sweep / bug hunt scaffold",
+            "description": "Search broadly, then converge to a small patch.",
+            "content": "Do a repo sweep for adjacent call paths, likely breakpoints, and related tests before landing the minimal fix. Confirm the real source of failure before editing.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B6",
+            "bankId": "B",
+            "slotIndex": 6,
+            "kind": "workflow",
+            "label": "Explain root cause first",
+            "description": "Lead with the actual failure mechanism before the patch.",
+            "content": "Explain the root cause in plain language before proposing code changes. Separate symptom, trigger, and fix so the final answer is easy to trust.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B7",
+            "bankId": "B",
+            "slotIndex": 7,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B8",
+            "bankId": "B",
+            "slotIndex": 8,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B9",
+            "bankId": "B",
+            "slotIndex": 9,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          }
+        ]
+      },
+      "supers": [
+        {
+          "id": "repo-bughunt-super",
+          "name": "Repo bughunt super",
+          "description": "Queue context + repo sweep + auth guardrails in one move.",
+          "steps": [
+            {
+              "type": "slot",
+              "slotRef": {
+                "bankId": "A",
+                "slotIndex": 2
+              }
+            },
+            {
+              "type": "slot",
+              "slotRef": {
+                "bankId": "B",
+                "slotIndex": 5
+              }
+            },
+            {
+              "type": "slot",
+              "slotRef": {
+                "bankId": "B",
+                "slotIndex": 3
+              }
+            }
+          ],
+          "applyStances": true,
+          "hotkeyHint": null,
+          "assembly": null
+        }
+      ]
+    },
+    {
+      "id": "repo-starter-template",
+      "name": "Repo starter template",
+      "kind": "workspace",
+      "description": "Copy this workspace profile and replace the match rules, repo name, and Bank A context with your own project.",
+      "priority": 40,
+      "extendsProfileId": "global-workflow",
+      "matchRules": [
+        {
+          "id": "workspace-contains-your-repo",
+          "kind": "workspacePathContains",
+          "value": "your-repo-name",
+          "caseSensitive": false,
+          "weightBoost": 35
+        },
+        {
+          "id": "title-contains-your-repo",
+          "kind": "windowTitleContains",
+          "value": "your-repo-name",
+          "caseSensitive": false,
+          "weightBoost": 10
+        }
+      ],
+      "assembly": {
+        "style": "markdown",
+        "joiner": "\n\n---\n\n"
+      },
+      "bankA": {
+        "bankId": "A",
+        "name": "Repo context bank",
+        "slots": [
+          {
+            "id": "A0",
+            "bankId": "A",
+            "slotIndex": 0,
+            "kind": "context",
+            "label": "Repo map",
+            "description": "Top-level modules, conventions, and docs that matter for edits.",
+            "content": "List the directories, nearest AGENTS.md instructions, build commands, and docs that shape work in this repo.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A1",
+            "bankId": "A",
+            "slotIndex": 1,
+            "kind": "context",
+            "label": "Failing command",
+            "description": "The one command, page, or flow that currently breaks.",
+            "content": "State the exact failing command, screen, route, or workflow plus the expected outcome.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A2",
+            "bankId": "A",
+            "slotIndex": 2,
+            "kind": "context",
+            "label": "Touched files",
+            "description": "The current files under review or likely blast radius.",
+            "content": "List the files already changed or most likely involved, and why each one matters.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A3",
+            "bankId": "A",
+            "slotIndex": 3,
+            "kind": "context",
+            "label": "Logs and traces",
+            "description": "Signal-rich logs, traces, or screenshots.",
+            "content": "Paste the most useful logs, stack traces, screenshots, or timestamps and call out the lines that matter.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A4",
+            "bankId": "A",
+            "slotIndex": 4,
+            "kind": "context",
+            "label": "Acceptance checks",
+            "description": "The checks that prove the fix is real.",
+            "content": "Write the exact tests, smoke checks, or manual verification steps that must pass before shipping.",
+            "enabled": true,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A5",
+            "bankId": "A",
+            "slotIndex": 5,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A6",
+            "bankId": "A",
+            "slotIndex": 6,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A7",
+            "bankId": "A",
+            "slotIndex": 7,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A8",
+            "bankId": "A",
+            "slotIndex": 8,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "A9",
+            "bankId": "A",
+            "slotIndex": 9,
+            "kind": "context",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "override",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          }
+        ]
+      },
+      "bankB": {
+        "bankId": "B",
+        "name": "Workflow bank overrides",
+        "slots": [
+          {
+            "id": "B0",
+            "bankId": "B",
+            "slotIndex": 0,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "inherit",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B1",
+            "bankId": "B",
+            "slotIndex": 1,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "inherit",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B2",
+            "bankId": "B",
+            "slotIndex": 2,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "inherit",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B3",
+            "bankId": "B",
+            "slotIndex": 3,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "inherit",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B4",
+            "bankId": "B",
+            "slotIndex": 4,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "inherit",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B5",
+            "bankId": "B",
+            "slotIndex": 5,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "inherit",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B6",
+            "bankId": "B",
+            "slotIndex": 6,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "inherit",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B7",
+            "bankId": "B",
+            "slotIndex": 7,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "inherit",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B8",
+            "bankId": "B",
+            "slotIndex": 8,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "inherit",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          },
+          {
+            "id": "B9",
+            "bankId": "B",
+            "slotIndex": 9,
+            "kind": "workflow",
+            "label": "",
+            "description": "",
+            "content": "",
+            "enabled": false,
+            "inheritanceMode": "inherit",
+            "templateMode": "plain",
+            "assemblyMode": "append",
+            "tags": []
+          }
+        ]
+      },
+      "supers": [
+        {
+          "id": "repo-bughunt-super",
+          "name": "Repo bughunt super",
+          "description": "Context opener plus sweep and guardrails for a new repo.",
+          "steps": [
+            {
+              "type": "slot",
+              "slotRef": {
+                "bankId": "A",
+                "slotIndex": 1
+              }
+            },
+            {
+              "type": "slot",
+              "slotRef": {
+                "bankId": "A",
+                "slotIndex": 4
+              }
+            },
+            {
+              "type": "slot",
+              "slotRef": {
+                "bankId": "B",
+                "slotIndex": 5
+              }
+            },
+            {
+              "type": "slot",
+              "slotRef": {
+                "bankId": "B",
+                "slotIndex": 6
+              }
+            }
+          ],
+          "applyStances": true,
+          "hotkeyHint": null,
+          "assembly": {
+            "style": "markdown",
+            "joiner": "\n\n---\n\n"
+          }
+        }
+      ]
+    }
+  ]
+}

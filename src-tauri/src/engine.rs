@@ -647,7 +647,9 @@ impl NativeEngine {
         if let Some(action) = action {
             let engine = self.clone();
             tauri::async_runtime::spawn(async move {
-                let _ = engine.dispatch_hotkey_action(&app, action);
+                if let Err(error) = engine.dispatch_hotkey_action(&app, action) {
+                    let _ = engine.emit_status(&app, &format!("Error: {error}"));
+                }
             });
         }
     }
@@ -1600,14 +1602,14 @@ fn write_clipboard_text(text: &str) -> Result<(), String> {
 }
 
 fn wait_for_hotkey_modifiers_to_release() {
-    for _ in 0..20 {
+    for _ in 0..100 {
         let alt_down = unsafe { GetAsyncKeyState(VK_MENU.0 as i32) } < 0;
         let ctrl_down = unsafe { GetAsyncKeyState(VK_CONTROL.0 as i32) } < 0;
         let shift_down = unsafe { GetAsyncKeyState(VK_SHIFT.0 as i32) } < 0;
         if !alt_down && !ctrl_down && !shift_down {
             return;
         }
-        thread::sleep(Duration::from_millis(15));
+        thread::sleep(Duration::from_millis(10));
     }
 }
 
@@ -1645,10 +1647,11 @@ fn send_ctrl_c() -> Result<(), String> {
 
 fn capture_selection_via_ctrl_c() -> Result<String, String> {
     wait_for_hotkey_modifiers_to_release();
+    thread::sleep(Duration::from_millis(50));
     let sequence_before = unsafe { GetClipboardSequenceNumber() };
     send_ctrl_c()?;
 
-    for _ in 0..20 {
+    for _ in 0..40 {
         thread::sleep(Duration::from_millis(25));
         let sequence_after = unsafe { GetClipboardSequenceNumber() };
         if sequence_after != sequence_before {

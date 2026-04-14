@@ -31,24 +31,26 @@ That split is the whole point. You do not want twenty random clips. You want a l
 
 ## Hotkey model
 
-Default hotkeys:
-- `Ctrl+1..0` paste Bank A slots
-- `Ctrl+Alt+1..0` paste Bank B slots
-- `Ctrl+Shift+1..0` copy the focused selection into Bank A slots
-- `Ctrl+Alt+Shift+1..0` copy the focused selection into Bank B slots
-- The numpad mirrors the same slots for paste and save, so both top-row digits and numpad digits work.
-- Save hotkeys first trigger `Ctrl+C` against the focused selection, then store the copied text in the target slot.
+Default hotkeys (numpad-primary, top-row digits also work):
+- `Ctrl+Numpad1..0` paste Bank A slots
+- `Ctrl+Alt+Numpad1..0` paste Bank B slots
+- `Ctrl+Shift+Numpad1..0` capture the focused selection into Bank A slots
+- `Ctrl+Alt+Shift+Numpad1..0` capture the focused selection into Bank B slots
+- The top-row digit keys mirror the same slots, so both numpad and top-row digits work.
+- Save hotkeys synthesize the appropriate copy gesture (`Ctrl+C` for editors, `Ctrl+Shift+C` for terminals) against the focused selection, then store the captured text in the target slot.
+- Paste hotkeys automatically use `Ctrl+Shift+V` in terminal-like windows (Windows Terminal, PowerShell, Opencode, WezTerm, etc.) and `Ctrl+V` everywhere else.
 
 Combo/runtime hotkeys:
-- `Ctrl+Alt+Enter` paste the queued combo
-- `Ctrl+Alt+Backspace` clear the queue
-- `Ctrl+Alt+R` replay the last combo
-- `Ctrl+Alt+Space` toggle the dock window
+- `Ctrl+NumpadEnter` paste the queued combo
+- `Ctrl+NumpadDecimal` clear the queue
+- `Ctrl+NumpadAdd` replay the last combo
+- `Ctrl+NumpadSubtract` toggle the dock window
 
 Safety:
-- `Pause hotkeys` in the app pauses all registered global hotkeys.
+- `Ctrl+Pause` panic toggle — suspends all slot hotkeys.
 - The same state is exposed through the tray menu.
 - The status bar and native bridge report degraded or conflicting bindings instead of failing silently.
+- Persisted legacy hotkey defaults (Alt-based or Ctrl+digit) are automatically migrated to the new numpad defaults on next launch. Custom bindings are never overwritten.
 
 ## What the app does
 
@@ -165,8 +167,8 @@ A practical first session:
 1. Launch SuperPaste.
 2. Keep Bank A focused on repo-specific context for the project in front of you.
 3. Keep Bank B focused on stable workflow moves you want across repos.
-4. Save your current repo notes into Bank A with `Ctrl+Shift+<digit>` or the matching numpad digit.
-5. Fire a workflow move from Bank B with `Ctrl+Alt+<digit>`.
+4. Save your current repo notes into Bank A with `Ctrl+Shift+Numpad1` (or the matching top-row key).
+5. Fire a workflow move from Bank B with `Ctrl+Alt+Numpad1`.
 6. Latch a stance like `Patch only` if you want it to stay active for a while.
 7. Queue a super, then hit the combo paste hotkey to assemble and paste the whole packet into your coding agent.
 8. Export your loadout as a pack once it feels right.
@@ -296,8 +298,8 @@ The exact smoke steps live in `docs/QA_CHECKLIST.md`.
 ## Known caveats
 
 - Clipboard restore is currently text-first rather than fully rich-content aware.
-- Direct slot paste and save are implemented and instrumented, but they still deserve manual Windows smoke against real apps like Notepad, VS Code, and Windows Terminal before a broad rollout.
-- Native hotkeys for direct slot save and paste are implemented; native combo-management hotkeys beyond the current runtime set are still conservative.
+- Terminal copy capture depends on the terminal supporting `Ctrl+Shift+C` for selection copy. Most modern terminals (Windows Terminal, WezTerm, Alacritty) support this by default.
+- Legacy console apps (`cmd.exe`, `conhost.exe`) may not support `Ctrl+Shift+C` — use a modern terminal instead.
 - Conflict diagnostics exist, but there is not yet a dedicated in-app log viewer for native events.
 
 ## Documentation

@@ -42,6 +42,19 @@ const PROFILES_FILE: &str = "profiles.json";
 const NATIVE_LOG_FILE: &str = "native.log";
 const SLOT_DIGITS_STANDARD: [&str; 10] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 const SLOT_DIGITS_ZERO_FIRST: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+const NUMPAD_DIGITS_STANDARD: [&str; 10] = ["Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9", "Numpad0"];
+const NUMPAD_DIGITS_ZERO_FIRST: [&str; 10] = ["Numpad0", "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9"];
+
+const TERMINAL_PROCESS_NAMES: &[&str] = &[
+    "windowsterminal.exe", "wt.exe", "wezterm-gui.exe", "wezterm.exe",
+    "alacritty.exe", "cmd.exe", "conhost.exe", "powershell.exe", "pwsh.exe",
+    "hyper.exe", "mintty.exe", "tabby.exe", "nu.exe", "opencode.exe",
+];
+
+const TERMINAL_TITLE_FRAGMENTS: &[&str] = &[
+    "opencode", "terminal", "powershell", "cmd prompt", "command prompt",
+    "wezterm", "alacritty", "hyper", "mintty",
+];
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -329,15 +342,15 @@ fn build_slot_hotkeys(prefix: &str, digits: &[&str; 10]) -> Vec<String> {
 
 fn default_hotkeys() -> HotkeyMapping {
     HotkeyMapping {
-        bank_a_paste: build_slot_hotkeys("Ctrl+", &SLOT_DIGITS_STANDARD),
-        bank_b_paste: build_slot_hotkeys("Ctrl+Alt+", &SLOT_DIGITS_STANDARD),
-        bank_a_save_clipboard: build_slot_hotkeys("Ctrl+Shift+", &SLOT_DIGITS_STANDARD),
-        bank_b_save_clipboard: build_slot_hotkeys("Ctrl+Alt+Shift+", &SLOT_DIGITS_STANDARD),
-        finalize_combo: "Alt+Enter".to_string(),
-        cancel_combo: "Alt+Backspace".to_string(),
-        replay_last_combo: "Alt+/".to_string(),
-        toggle_window: "Alt+`".to_string(),
-        panic_toggle: "Alt+Pause".to_string(),
+        bank_a_paste: build_slot_hotkeys("Ctrl+Numpad", &NUMPAD_DIGITS_STANDARD),
+        bank_b_paste: build_slot_hotkeys("Ctrl+Alt+Numpad", &NUMPAD_DIGITS_STANDARD),
+        bank_a_save_clipboard: build_slot_hotkeys("Ctrl+Shift+Numpad", &NUMPAD_DIGITS_STANDARD),
+        bank_b_save_clipboard: build_slot_hotkeys("Ctrl+Alt+Shift+Numpad", &NUMPAD_DIGITS_STANDARD),
+        finalize_combo: "Ctrl+NumpadEnter".to_string(),
+        cancel_combo: "Ctrl+NumpadDecimal".to_string(),
+        replay_last_combo: "Ctrl+NumpadAdd".to_string(),
+        toggle_window: "Ctrl+NumpadSubtract".to_string(),
+        panic_toggle: "Ctrl+Pause".to_string(),
         extra: HashMap::new(),
     }
 }
@@ -368,16 +381,22 @@ fn migrate_hotkeys_if_needed(hotkeys: &HotkeyMapping) -> (HotkeyMapping, bool) {
         &hotkeys.bank_a_paste,
         &[
             ("Alt+", &SLOT_DIGITS_STANDARD),
+            ("Ctrl+", &SLOT_DIGITS_STANDARD),
             ("Ctrl+Numpad", &SLOT_DIGITS_STANDARD),
             ("Ctrl+Numpad", &SLOT_DIGITS_ZERO_FIRST),
+            ("Ctrl+Numpad", &NUMPAD_DIGITS_STANDARD),
+            ("Ctrl+Numpad", &NUMPAD_DIGITS_ZERO_FIRST),
         ],
         &defaults.bank_a_paste,
     );
     let (bank_b_paste, b_paste_migrated) = normalize_binding_array(
         &hotkeys.bank_b_paste,
         &[
+            ("Ctrl+Alt+", &SLOT_DIGITS_STANDARD),
             ("Ctrl+Alt+Numpad", &SLOT_DIGITS_STANDARD),
             ("Ctrl+Alt+Numpad", &SLOT_DIGITS_ZERO_FIRST),
+            ("Ctrl+Alt+Numpad", &NUMPAD_DIGITS_STANDARD),
+            ("Ctrl+Alt+Numpad", &NUMPAD_DIGITS_ZERO_FIRST),
         ],
         &defaults.bank_b_paste,
     );
@@ -385,21 +404,40 @@ fn migrate_hotkeys_if_needed(hotkeys: &HotkeyMapping) -> (HotkeyMapping, bool) {
         &hotkeys.bank_a_save_clipboard,
         &[
             ("Alt+Shift+", &SLOT_DIGITS_STANDARD),
+            ("Ctrl+Shift+", &SLOT_DIGITS_STANDARD),
             ("Ctrl+Shift+Numpad", &SLOT_DIGITS_STANDARD),
             ("Ctrl+Shift+Numpad", &SLOT_DIGITS_ZERO_FIRST),
+            ("Ctrl+Shift+Numpad", &NUMPAD_DIGITS_STANDARD),
+            ("Ctrl+Shift+Numpad", &NUMPAD_DIGITS_ZERO_FIRST),
         ],
         &defaults.bank_a_save_clipboard,
     );
     let (bank_b_save_clipboard, b_save_migrated) = normalize_binding_array(
         &hotkeys.bank_b_save_clipboard,
         &[
+            ("Ctrl+Alt+Shift+", &SLOT_DIGITS_STANDARD),
             ("Ctrl+Alt+Shift+Numpad", &SLOT_DIGITS_STANDARD),
             ("Ctrl+Alt+Shift+Numpad", &SLOT_DIGITS_ZERO_FIRST),
+            ("Ctrl+Alt+Shift+Numpad", &NUMPAD_DIGITS_STANDARD),
+            ("Ctrl+Alt+Shift+Numpad", &NUMPAD_DIGITS_ZERO_FIRST),
         ],
         &defaults.bank_b_save_clipboard,
     );
 
-    let migrated = a_paste_migrated || b_paste_migrated || a_save_migrated || b_save_migrated;
+    let slot_migrated = a_paste_migrated || b_paste_migrated || a_save_migrated || b_save_migrated;
+
+    let legacy_runtime_combos = [
+        ("Alt+Enter", "Alt+Backspace", "Alt+/", "Alt+`", "Alt+Pause"),
+    ];
+    let runtime_migrated = legacy_runtime_combos.iter().any(|(fc, cc, rc, tw, pt)| {
+        hotkeys.finalize_combo == *fc
+            && hotkeys.cancel_combo == *cc
+            && hotkeys.replay_last_combo == *rc
+            && hotkeys.toggle_window == *tw
+            && hotkeys.panic_toggle == *pt
+    });
+
+    let migrated = slot_migrated || runtime_migrated;
 
     (
         HotkeyMapping {
@@ -407,11 +445,11 @@ fn migrate_hotkeys_if_needed(hotkeys: &HotkeyMapping) -> (HotkeyMapping, bool) {
             bank_b_paste,
             bank_a_save_clipboard,
             bank_b_save_clipboard,
-            finalize_combo: hotkeys.finalize_combo.clone(),
-            cancel_combo: hotkeys.cancel_combo.clone(),
-            replay_last_combo: hotkeys.replay_last_combo.clone(),
-            toggle_window: hotkeys.toggle_window.clone(),
-            panic_toggle: hotkeys.panic_toggle.clone(),
+            finalize_combo: if runtime_migrated { defaults.finalize_combo.clone() } else { hotkeys.finalize_combo.clone() },
+            cancel_combo: if runtime_migrated { defaults.cancel_combo.clone() } else { hotkeys.cancel_combo.clone() },
+            replay_last_combo: if runtime_migrated { defaults.replay_last_combo.clone() } else { hotkeys.replay_last_combo.clone() },
+            toggle_window: if runtime_migrated { defaults.toggle_window.clone() } else { hotkeys.toggle_window.clone() },
+            panic_toggle: if runtime_migrated { defaults.panic_toggle.clone() } else { hotkeys.panic_toggle.clone() },
             extra: hotkeys.extra.clone(),
         },
         migrated,
@@ -613,6 +651,7 @@ impl NativeEngine {
             .execution_lock
             .lock()
             .map_err(|_| "execution lock poisoned".to_string())?;
+        let active_window = self.refresh_active_window()?;
 
         let result = match plan.execution_mode.as_str() {
             "queue-only" => PasteResult {
@@ -628,7 +667,7 @@ impl NativeEngine {
                     copied_text: Some(plan.text),
                 }
             }
-            _ => paste_text_transaction(&plan.text, plan.restore_clipboard),
+            _ => paste_text_transaction(&plan.text, &active_window, plan.restore_clipboard),
         };
 
         self.emit_status(app, &result.message)?;
@@ -800,6 +839,7 @@ impl NativeEngine {
 
         Ok(paste_text_transaction(
             &text,
+            &active_window,
             self.inner
                 .documents
                 .read()
@@ -817,7 +857,7 @@ impl NativeEngine {
             .lock()
             .map_err(|_| "execution lock poisoned".to_string())?;
         let active_window = self.refresh_active_window()?;
-        let clipboard_text = capture_selection_via_ctrl_c()?;
+        let clipboard_text = capture_selection(&active_window)?;
         let resolved = self.resolve_profile(&active_window)?;
 
         let documents = self
@@ -869,7 +909,7 @@ impl NativeEngine {
         *documents = next_documents;
 
         Ok(format!(
-            "Copied the focused selection and saved it into {target_profile_name} {bank_id}{}.",
+            "Captured selection and saved into {target_profile_name} {bank_id}{}.",
             slot_index + 1
         ))
     }
@@ -921,14 +961,14 @@ impl NativeEngine {
 
         for (slot_index, binding) in settings.hotkeys.bank_a_paste.iter().enumerate() {
             bindings.push((binding.clone(), HotkeyAction::PasteSlot { bank_id: 'A', slot_index }));
-            if let Some(numpad) = to_numpad_binding(binding) {
-                bindings.push((numpad, HotkeyAction::PasteSlot { bank_id: 'A', slot_index }));
+            if let Some(alias) = to_alias_binding(binding) {
+                bindings.push((alias, HotkeyAction::PasteSlot { bank_id: 'A', slot_index }));
             }
         }
         for (slot_index, binding) in settings.hotkeys.bank_b_paste.iter().enumerate() {
             bindings.push((binding.clone(), HotkeyAction::PasteSlot { bank_id: 'B', slot_index }));
-            if let Some(numpad) = to_numpad_binding(binding) {
-                bindings.push((numpad, HotkeyAction::PasteSlot { bank_id: 'B', slot_index }));
+            if let Some(alias) = to_alias_binding(binding) {
+                bindings.push((alias, HotkeyAction::PasteSlot { bank_id: 'B', slot_index }));
             }
         }
         for (slot_index, binding) in settings.hotkeys.bank_a_save_clipboard.iter().enumerate() {
@@ -939,9 +979,9 @@ impl NativeEngine {
                     slot_index,
                 },
             ));
-            if let Some(numpad) = to_numpad_binding(binding) {
+            if let Some(alias) = to_alias_binding(binding) {
                 bindings.push((
-                    numpad,
+                    alias,
                     HotkeyAction::SaveClipboardToSlot {
                         bank_id: 'A',
                         slot_index,
@@ -957,9 +997,9 @@ impl NativeEngine {
                     slot_index,
                 },
             ));
-            if let Some(numpad) = to_numpad_binding(binding) {
+            if let Some(alias) = to_alias_binding(binding) {
                 bindings.push((
-                    numpad,
+                    alias,
                     HotkeyAction::SaveClipboardToSlot {
                         bank_id: 'B',
                         slot_index,
@@ -1070,7 +1110,7 @@ fn load_or_seed_documents(app_data_dir: &Path) -> Result<LoadDocumentsResult, St
         settings_document.settings.hotkeys = migrated_hotkeys;
         settings_document.saved_at_iso = now_iso();
         notices.push(
-            "Migrated saved hotkeys to Ctrl digit defaults and enabled matching numpad aliases."
+            "Migrated saved hotkeys to Ctrl+Numpad defaults with top-row aliases."
                 .to_string(),
         );
     }
@@ -1532,7 +1572,7 @@ fn render_template(content: &str, clipboard: &str, profile: &str, active_app: &s
         .replace("{{date}}", &now_iso()[..10])
 }
 
-fn paste_text_transaction(text: &str, restore_clipboard: bool) -> PasteResult {
+fn paste_text_transaction(text: &str, active_window: &ActiveWindowSnapshot, restore_clipboard: bool) -> PasteResult {
     let original_clipboard = if restore_clipboard {
         match read_clipboard_text() {
             Ok(text) => Some(text),
@@ -1558,7 +1598,11 @@ fn paste_text_transaction(text: &str, restore_clipboard: bool) -> PasteResult {
 
     let paste_result = (|| -> Result<(), String> {
         wait_for_hotkey_modifiers_to_release();
-        send_ctrl_v()?;
+        if looks_like_terminal_window(active_window) {
+            send_ctrl_shift_v()?;
+        } else {
+            send_ctrl_v()?;
+        }
         thread::sleep(Duration::from_millis(100));
         Ok(())
     })();
@@ -1629,6 +1673,24 @@ fn send_ctrl_v() -> Result<(), String> {
     Ok(())
 }
 
+fn send_ctrl_shift_v() -> Result<(), String> {
+    let inputs = [
+        keyboard_input(VK_CONTROL.0 as u16, false),
+        keyboard_input(VK_SHIFT.0 as u16, false),
+        keyboard_input(b'V' as u16, false),
+        keyboard_input(b'V' as u16, true),
+        keyboard_input(VK_SHIFT.0 as u16, true),
+        keyboard_input(VK_CONTROL.0 as u16, true),
+    ];
+
+    let sent = unsafe { SendInput(&inputs, size_of::<INPUT>() as i32) };
+    if sent != inputs.len() as u32 {
+        return Err("Failed to synthesize Ctrl+Shift+V into the focused app.".to_string());
+    }
+
+    Ok(())
+}
+
 fn send_ctrl_c() -> Result<(), String> {
     let inputs = [
         keyboard_input(VK_CONTROL.0 as u16, false),
@@ -1645,11 +1707,36 @@ fn send_ctrl_c() -> Result<(), String> {
     Ok(())
 }
 
-fn capture_selection_via_ctrl_c() -> Result<String, String> {
+fn send_ctrl_shift_c() -> Result<(), String> {
+    let inputs = [
+        keyboard_input(VK_CONTROL.0 as u16, false),
+        keyboard_input(VK_SHIFT.0 as u16, false),
+        keyboard_input(b'C' as u16, false),
+        keyboard_input(b'C' as u16, true),
+        keyboard_input(VK_SHIFT.0 as u16, true),
+        keyboard_input(VK_CONTROL.0 as u16, true),
+    ];
+
+    let sent = unsafe { SendInput(&inputs, size_of::<INPUT>() as i32) };
+    if sent != inputs.len() as u32 {
+        return Err("Failed to synthesize Ctrl+Shift+C from the focused selection.".to_string());
+    }
+
+    Ok(())
+}
+
+fn capture_selection(active_window: &ActiveWindowSnapshot) -> Result<String, String> {
     wait_for_hotkey_modifiers_to_release();
     thread::sleep(Duration::from_millis(50));
+
+    let original_clipboard = read_clipboard_text().ok();
     let sequence_before = unsafe { GetClipboardSequenceNumber() };
-    send_ctrl_c()?;
+
+    if looks_like_terminal_window(active_window) {
+        send_ctrl_shift_c()?;
+    } else {
+        send_ctrl_c()?;
+    }
 
     for _ in 0..40 {
         thread::sleep(Duration::from_millis(25));
@@ -1661,7 +1748,14 @@ fn capture_selection_via_ctrl_c() -> Result<String, String> {
 
     let clipboard_text = read_clipboard_text()?;
     if clipboard_text.trim().is_empty() {
-        return Err("Ctrl+Shift slot save ran, but the focused app did not place any text on the clipboard. Highlight text first and make sure the target app supports Ctrl+C.".to_string());
+        if let Some(original) = original_clipboard {
+            let _ = write_clipboard_text(&original);
+        }
+        return Err(format!(
+            "No text selection was captured. {}{} was left unchanged.",
+            active_window.process_name,
+            if looks_like_terminal_window(active_window) { " (tried Ctrl+Shift+C)" } else { " (tried Ctrl+C)" },
+        ));
     }
 
     Ok(clipboard_text)
@@ -1682,16 +1776,37 @@ fn keyboard_input(virtual_key: u16, key_up: bool) -> INPUT {
     }
 }
 
-fn to_numpad_binding(binding: &str) -> Option<String> {
-    let numpad_map: &[(&str, &str)] = &[
+fn to_alias_binding(binding: &str) -> Option<String> {
+    let suffix = binding.split('+').last()?;
+    let prefix = &binding[..binding.len() - suffix.len()];
+
+    let numpad_to_digit: &[(&str, &str)] = &[
+        ("Numpad0", "0"), ("Numpad1", "1"), ("Numpad2", "2"), ("Numpad3", "3"),
+        ("Numpad4", "4"), ("Numpad5", "5"), ("Numpad6", "6"), ("Numpad7", "7"),
+        ("Numpad8", "8"), ("Numpad9", "9"),
+    ];
+    let digit_to_numpad: &[(&str, &str)] = &[
         ("0", "Numpad0"), ("1", "Numpad1"), ("2", "Numpad2"), ("3", "Numpad3"),
         ("4", "Numpad4"), ("5", "Numpad5"), ("6", "Numpad6"), ("7", "Numpad7"),
         ("8", "Numpad8"), ("9", "Numpad9"),
     ];
-    let suffix = binding.split('+').last()?;
-    let replacement = numpad_map.iter().find(|(digit, _)| *digit == suffix)?;
-    let prefix = &binding[..binding.len() - suffix.len()];
-    Some(format!("{prefix}{}", replacement.1))
+
+    if let Some((_, digit)) = numpad_to_digit.iter().find(|(np, _)| *np == suffix) {
+        return Some(format!("{prefix}{digit}"));
+    }
+    if let Some((_, numpad)) = digit_to_numpad.iter().find(|(d, _)| *d == suffix) {
+        return Some(format!("{prefix}{numpad}"));
+    }
+    None
+}
+
+fn looks_like_terminal_window(active_window: &ActiveWindowSnapshot) -> bool {
+    let process_lower = active_window.process_name.to_lowercase();
+    if TERMINAL_PROCESS_NAMES.iter().any(|name| process_lower == *name) {
+        return true;
+    }
+    let title_lower = active_window.title.to_lowercase();
+    TERMINAL_TITLE_FRAGMENTS.iter().any(|fragment| title_lower.contains(fragment))
 }
 
 fn sample_active_window() -> Result<ActiveWindowSnapshot, String> {
@@ -1833,6 +1948,94 @@ mod tests {
         assert_eq!(migrated.bank_b_paste, defaults.bank_b_paste);
         assert_eq!(migrated.bank_a_save_clipboard, defaults.bank_a_save_clipboard);
         assert_eq!(migrated.bank_b_save_clipboard, defaults.bank_b_save_clipboard);
+        assert_eq!(migrated.finalize_combo, defaults.finalize_combo);
+        assert_eq!(migrated.cancel_combo, defaults.cancel_combo);
+        assert_eq!(migrated.replay_last_combo, defaults.replay_last_combo);
+        assert_eq!(migrated.toggle_window, defaults.toggle_window);
+        assert_eq!(migrated.panic_toggle, defaults.panic_toggle);
+    }
+
+    #[test]
+    fn migrate_hotkeys_preserves_custom_bindings() {
+        let custom = HotkeyMapping {
+            bank_a_paste: build_slot_hotkeys("Ctrl+F", &SLOT_DIGITS_STANDARD),
+            bank_b_paste: build_slot_hotkeys("Ctrl+Alt+F", &SLOT_DIGITS_STANDARD),
+            bank_a_save_clipboard: build_slot_hotkeys("Win+Shift+", &SLOT_DIGITS_STANDARD),
+            bank_b_save_clipboard: build_slot_hotkeys("Win+Alt+Shift+", &SLOT_DIGITS_STANDARD),
+            finalize_combo: "Ctrl+Enter".to_string(),
+            cancel_combo: "Ctrl+Escape".to_string(),
+            replay_last_combo: "Ctrl+R".to_string(),
+            toggle_window: "Ctrl+`".to_string(),
+            panic_toggle: "Ctrl+Pause".to_string(),
+            extra: HashMap::new(),
+        };
+
+        let (migrated, changed) = migrate_hotkeys_if_needed(&custom);
+
+        assert!(!changed);
+        assert_eq!(migrated.bank_a_paste, custom.bank_a_paste);
+        assert_eq!(migrated.bank_a_save_clipboard, custom.bank_a_save_clipboard);
+    }
+
+    #[test]
+    fn migrate_hotkeys_migrates_ctrl_digit_to_numpad() {
+        let defaults = default_hotkeys();
+        let legacy = HotkeyMapping {
+            bank_a_paste: build_slot_hotkeys("Ctrl+", &SLOT_DIGITS_STANDARD),
+            bank_b_paste: build_slot_hotkeys("Ctrl+Alt+", &SLOT_DIGITS_STANDARD),
+            bank_a_save_clipboard: build_slot_hotkeys("Ctrl+Shift+", &SLOT_DIGITS_STANDARD),
+            bank_b_save_clipboard: build_slot_hotkeys("Ctrl+Alt+Shift+", &SLOT_DIGITS_STANDARD),
+            finalize_combo: "Alt+Enter".to_string(),
+            cancel_combo: "Alt+Backspace".to_string(),
+            replay_last_combo: "Alt+/".to_string(),
+            toggle_window: "Alt+`".to_string(),
+            panic_toggle: "Alt+Pause".to_string(),
+            extra: HashMap::new(),
+        };
+
+        let (migrated, changed) = migrate_hotkeys_if_needed(&legacy);
+
+        assert!(changed);
+        assert_eq!(migrated.bank_a_paste, defaults.bank_a_paste);
+        assert_eq!(migrated.bank_b_paste, defaults.bank_b_paste);
+        assert_eq!(migrated.bank_a_save_clipboard, defaults.bank_a_save_clipboard);
+        assert_eq!(migrated.bank_b_save_clipboard, defaults.bank_b_save_clipboard);
+    }
+
+    #[test]
+    fn looks_like_terminal_window_detects_known_terminals() {
+        let terminal_window = ActiveWindowSnapshot {
+            title: "Opencode".to_string(),
+            process_name: "opencode.exe".to_string(),
+            process_path: String::new(),
+            workspace_path: String::new(),
+        };
+        assert!(looks_like_terminal_window(&terminal_window));
+
+        let wt_window = ActiveWindowSnapshot {
+            title: "Windows PowerShell".to_string(),
+            process_name: "windowsterminal.exe".to_string(),
+            process_path: String::new(),
+            workspace_path: String::new(),
+        };
+        assert!(looks_like_terminal_window(&wt_window));
+
+        let editor_window = ActiveWindowSnapshot {
+            title: "my_file.ts - My Project - Visual Studio Code".to_string(),
+            process_name: "code.exe".to_string(),
+            process_path: String::new(),
+            workspace_path: String::new(),
+        };
+        assert!(!looks_like_terminal_window(&editor_window));
+    }
+
+    #[test]
+    fn to_alias_binding_bijects_numpad_and_digits() {
+        assert_eq!(to_alias_binding("Ctrl+Numpad1"), Some("Ctrl+1".to_string()));
+        assert_eq!(to_alias_binding("Ctrl+1"), Some("Ctrl+Numpad1".to_string()));
+        assert_eq!(to_alias_binding("Ctrl+Shift+Numpad5"), Some("Ctrl+Shift+5".to_string()));
+        assert_eq!(to_alias_binding("Ctrl+Shift+5"), Some("Ctrl+Shift+Numpad5".to_string()));
+        assert_eq!(to_alias_binding("Ctrl+Pause"), None);
     }
 
     #[test]
@@ -1872,6 +2075,48 @@ mod tests {
             build_slot_hotkeys("Alt+", &SLOT_DIGITS_STANDARD);
         documents.settings_document.settings.hotkeys.bank_a_save_clipboard =
             build_slot_hotkeys("Alt+Shift+", &SLOT_DIGITS_STANDARD);
+
+        fs::write(
+            app_data_dir.join(SETTINGS_FILE),
+            serde_json::to_string_pretty(&documents.settings_document).expect("serialize settings"),
+        )
+        .expect("write settings");
+        fs::write(
+            app_data_dir.join(PROFILES_FILE),
+            serde_json::to_string_pretty(&documents.profiles_document).expect("serialize profiles"),
+        )
+        .expect("write profiles");
+
+        let loaded = load_or_seed_documents(&app_data_dir).expect("load migrated documents");
+
+        assert_eq!(
+            loaded.documents.settings_document.settings.hotkeys.bank_a_paste,
+            default_hotkeys().bank_a_paste
+        );
+        assert_eq!(
+            loaded.documents.settings_document.settings.hotkeys.bank_a_save_clipboard,
+            default_hotkeys().bank_a_save_clipboard
+        );
+        assert!(
+            loaded
+                .notices
+                .iter()
+                .any(|notice| notice.contains("Migrated saved hotkeys"))
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn load_or_seed_documents_migrates_ctrl_digit_to_numpad() {
+        let app_data_dir = temp_path("ctrl-digit-migration");
+        fs::create_dir_all(&app_data_dir).expect("create temp app data dir");
+
+        let mut documents = default_documents();
+        documents.settings_document.settings.hotkeys.bank_a_paste =
+            build_slot_hotkeys("Ctrl+", &SLOT_DIGITS_STANDARD);
+        documents.settings_document.settings.hotkeys.bank_a_save_clipboard =
+            build_slot_hotkeys("Ctrl+Shift+", &SLOT_DIGITS_STANDARD);
 
         fs::write(
             app_data_dir.join(SETTINGS_FILE),

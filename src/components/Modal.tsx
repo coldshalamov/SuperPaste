@@ -9,7 +9,13 @@ type ModalProps = {
   children: React.ReactNode;
 };
 
-export function Modal({ open, onClose, title, width = "max-w-lg", children }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  width = "max-w-md",
+  children,
+}: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -48,19 +54,17 @@ export function Modal({ open, onClose, title, width = "max-w-lg", children }: Mo
         aria-label={title}
       >
         <header className="modal-header">
-          <h2 className="text-base font-semibold m-0">{title}</h2>
+          <h2 className="text-sm font-semibold m-0">{title}</h2>
           <button
             className="btn btn-sm btn-ghost btn-icon"
             onClick={onClose}
             type="button"
             aria-label="Close"
           >
-            <X size={16} />
+            <X size={14} />
           </button>
         </header>
-        <div className="modal-body scrollbar-thin">
-          {children}
-        </div>
+        <div className="modal-body scrollbar-thin">{children}</div>
       </div>
       <dialog ref={dialogRef} className="sr-only" aria-hidden="true" />
     </div>

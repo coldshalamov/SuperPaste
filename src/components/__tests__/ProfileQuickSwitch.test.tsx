@@ -19,7 +19,7 @@ describe("ProfileQuickSwitch", () => {
       />,
     );
 
-    const select = screen.getByLabelText("Profile override");
+    const select = screen.getByLabelText("Profile selection");
     await user.selectOptions(select, "global-workflow");
     expect(onSelectProfile).toHaveBeenCalledWith("global-workflow");
 

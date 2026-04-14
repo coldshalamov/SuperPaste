@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { Check } from "lucide-react";
 
 type ToastRailProps = {
   message: string;
@@ -10,8 +10,8 @@ export function ToastRail({ message }: ToastRailProps) {
   return (
     <aside aria-live="polite" className="toast-rail">
       <div className="toast-card flex items-center gap-2">
-        <Info size={14} className="text-[var(--color-accent-a)] shrink-0" />
-        {message}
+        <Check size={12} className="text-[var(--color-success)] shrink-0" />
+        <span className="text-sm">{message}</span>
       </div>
     </aside>
   );

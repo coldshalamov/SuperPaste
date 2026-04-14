@@ -10,6 +10,7 @@ describe("EditorShell", () => {
     const user = userEvent.setup();
     const seed = createSeedDocuments("2026-04-13T00:00:00.000Z");
     const saveProfile = vi.fn().mockResolvedValue(undefined);
+    const saveSettings = vi.fn().mockResolvedValue(undefined);
 
     render(
       <EditorShell
@@ -24,7 +25,7 @@ describe("EditorShell", () => {
         onImportTextChange={vi.fn()}
         onSaveProfile={saveProfile}
         onSaveRecipe={vi.fn()}
-        onSaveSettings={vi.fn()}
+        onSaveSettings={saveSettings}
         onSelectSlot={vi.fn()}
         profiles={seed.profilesDocument.profiles}
         resolvedProfileId="therxspot"
@@ -39,8 +40,9 @@ describe("EditorShell", () => {
 
     expect(saveProfile).not.toHaveBeenCalled();
 
-    const saveButtons = screen.getAllByRole("button", { name: /save profile/i });
-    await user.click(saveButtons[0]);
+    // Click the "Save all" button that appears when there are unsaved changes
+    const saveAllButton = screen.getByRole("button", { name: /save all/i });
+    await user.click(saveAllButton);
     expect(saveProfile).toHaveBeenCalledTimes(1);
     expect(saveProfile.mock.calls[0][0].bankA.slots[0].label).toBe("Repo map updated");
   });
@@ -73,13 +75,17 @@ describe("EditorShell", () => {
       />,
     );
 
+    // Need to expand the Import/Export section first since it's collapsed by default
+    const importExportSection = screen.getByRole("button", { name: /import \/ export/i });
+    await user.click(importExportSection);
+
     const textarea = screen.getByDisplayValue('{"format":"superpaste-pack"}');
     await user.type(textarea, " ");
 
     expect(onApplyImportText).not.toHaveBeenCalled();
     expect(onImportTextChange).toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Import pasted JSON" }));
+    await user.click(screen.getByRole("button", { name: "Apply JSON" }));
     expect(onApplyImportText).toHaveBeenCalledTimes(1);
   });
 });

@@ -8,17 +8,98 @@ import { ToastRail } from "./components/ToastRail";
 import { HelpOverlay } from "./components/HelpOverlay";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { useSuperPasteApp } from "./hooks/useSuperPasteApp";
-import { Monitor, Pause, Play, FlaskConical, HelpCircle, Keyboard } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  Zap,
+  Pause,
+  Play,
+  MoreHorizontal,
+  HelpCircle,
+  FlaskConical,
+  Keyboard,
+} from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+
+function ActionMenu({
+  onShowTour,
+  onShowHelp,
+  onOpenTestHarness,
+}: {
+  onShowTour: () => void;
+  onShowHelp: () => void;
+  onOpenTestHarness: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [open]);
+
+  return (
+    <div className="action-menu" ref={menuRef}>
+      <button
+        className="btn btn-sm btn-ghost btn-icon"
+        onClick={() => setOpen(!open)}
+        type="button"
+        aria-label="More actions"
+        aria-expanded={open}
+      >
+        <MoreHorizontal size={16} />
+      </button>
+      {open && (
+        <div className="action-menu-dropdown">
+          <button
+            className="action-menu-item"
+            onClick={() => {
+              setOpen(false);
+              onShowTour();
+            }}
+            type="button"
+          >
+            <Keyboard size={14} />
+            Onboarding tour
+          </button>
+          <button
+            className="action-menu-item"
+            onClick={() => {
+              setOpen(false);
+              onShowHelp();
+            }}
+            type="button"
+          >
+            <HelpCircle size={14} />
+            Keyboard shortcuts
+          </button>
+          <div className="action-menu-divider" />
+          <button
+            className="action-menu-item"
+            onClick={() => {
+              setOpen(false);
+              onOpenTestHarness();
+            }}
+            type="button"
+          >
+            <FlaskConical size={14} />
+            Test harness
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function MainShell() {
   const app = useSuperPasteApp();
   const [showHelp, setShowHelp] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-
-  const profileModeLabel = app.settings.activeProfileIdOverride
-    ? `Manual: ${app.resolvedProfile.profile.name}`
-    : "Auto";
 
   useEffect(() => {
     if (!app.settings.ui.helpDismissed) {
@@ -33,7 +114,6 @@ function MainShell() {
         setShowHelp(true);
       }
     }
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
@@ -46,27 +126,32 @@ function MainShell() {
     });
   }
 
+  const isPaused = app.settings.panicModeEnabled;
+  const hasWarnings = app.hotkeyConflicts.length > 0;
+
   return (
     <main className="app-shell">
-      <header className="grid grid-cols-[1fr_auto] gap-3 items-start">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-[var(--color-accent-a-dim)] border border-[var(--color-accent-a-border)]">
-              <Monitor size={18} className="text-[var(--color-accent-a)]" />
-            </div>
-            <div>
-              <p className="section-label !text-[var(--color-accent-a)] mb-0.5">Two-bank combo engine</p>
-              <h1 className="text-xl font-bold tracking-tight m-0" style={{ fontSize: "clamp(1.3rem, 2vw, 1.75rem)" }}>
-                SuperPaste
-              </h1>
-            </div>
+      {/* ============================================
+          HEADER
+          ============================================ */}
+      <header className="app-header">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--color-accent-a-dim)] border border-[var(--color-accent-a-border)]">
+            <Zap size={16} className="text-[var(--color-accent-a)]" />
           </div>
-          <p className="text-sm text-[var(--color-text-muted)] ml-12">
-            Ctrl+1..0 fires context. Ctrl+Alt+1..0 fires workflow. Numpad mirrors the same slots.
-          </p>
+          <div>
+            <h1 className="text-base font-semibold m-0 leading-tight">SuperPaste</h1>
+            <p className="text-xs text-[var(--color-text-muted)] m-0">
+              {app.resolvedProfile.profile.name}
+              <span className="mx-1.5 opacity-40">|</span>
+              <span className={isPaused ? "text-[var(--color-warning)]" : hasWarnings ? "text-[var(--color-warning)]" : "text-[var(--color-success)]"}>
+                {isPaused ? "Paused" : hasWarnings ? "Degraded" : "Active"}
+              </span>
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-start justify-end gap-2">
+        <div className="flex items-center gap-2">
           <ProfileQuickSwitch
             activeOverrideId={app.settings.activeProfileIdOverride}
             onSelectProfile={(profileId) => void app.setManualProfileOverride(profileId)}
@@ -74,29 +159,9 @@ function MainShell() {
             resolvedProfileId={app.resolvedProfile.profile.id}
           />
 
-          <button
-            className="btn btn-sm btn-ghost"
-            onClick={() => setShowOnboarding(true)}
-            type="button"
-            title="Onboarding walkthrough"
-          >
-            <Keyboard size={13} />
-            Tour
-          </button>
-
-          <button
-            className="btn btn-sm btn-ghost"
-            onClick={() => setShowHelp(true)}
-            type="button"
-            title="Keyboard shortcuts and help (F1)"
-          >
-            <HelpCircle size={13} />
-            Help
-          </button>
-
-          <div className="mode-toggle" aria-label="Shell mode">
+          <div className="mode-toggle">
             <button
-              aria-label="Switch to dock mode"
+              aria-label="Dock mode"
               aria-pressed={app.shellMode === "dock"}
               className={app.shellMode === "dock" ? "is-active" : ""}
               onClick={() => app.setShellMode("dock")}
@@ -105,7 +170,7 @@ function MainShell() {
               Dock
             </button>
             <button
-              aria-label="Switch to editor mode"
+              aria-label="Editor mode"
               aria-pressed={app.shellMode === "editor"}
               className={app.shellMode === "editor" ? "is-active" : ""}
               onClick={() => app.setShellMode("editor")}
@@ -116,35 +181,27 @@ function MainShell() {
           </div>
 
           <button
-            className={`btn btn-sm ${app.settings.panicModeEnabled ? "btn-warning" : "btn-ghost"}`}
-            onClick={() => void app.saveSettings({ ...app.settings, panicModeEnabled: !app.settings.panicModeEnabled })}
+            className={`btn btn-sm ${isPaused ? "btn-warning" : "btn-ghost"}`}
+            onClick={() =>
+              void app.saveSettings({ ...app.settings, panicModeEnabled: !isPaused })
+            }
             type="button"
+            title={isPaused ? "Resume hotkeys" : "Pause hotkeys"}
           >
-            {app.settings.panicModeEnabled ? <Play size={13} /> : <Pause size={13} />}
-            {app.settings.panicModeEnabled ? "Resume" : "Pause"}
+            {isPaused ? <Play size={14} /> : <Pause size={14} />}
           </button>
 
-          <button className="btn btn-sm btn-ghost" onClick={() => void app.openTestHarness()} type="button">
-            <FlaskConical size={13} />
-            Smoke
-          </button>
-        </div>
-
-        <div className="grid col-span-2 grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2 mt-1">
-          <div className="card flex flex-col justify-center gap-0.5 py-3">
-            <span className="section-label">Active profile</span>
-            <strong className="text-sm">{app.resolvedProfile.profile.name}</strong>
-            <span className="text-xs text-[var(--color-text-muted)]">{profileModeLabel}</span>
-          </div>
-
-          <div className="card flex flex-col justify-center gap-0.5 py-3">
-            <span className="section-label">Native shell</span>
-            <strong className="text-sm">{app.runtime.nativeShellMode}</strong>
-            <span className="text-xs text-[var(--color-text-muted)]">{app.resolvedProfile.reason || "Waiting for match"}</span>
-          </div>
+          <ActionMenu
+            onShowTour={() => setShowOnboarding(true)}
+            onShowHelp={() => setShowHelp(true)}
+            onOpenTestHarness={() => void app.openTestHarness()}
+          />
         </div>
       </header>
 
+      {/* ============================================
+          MAIN CONTENT
+          ============================================ */}
       <section className={`app-body ${app.shellMode === "editor" ? "is-editor" : ""}`}>
         <CompactDock
           activeBuffer={app.comboState}
@@ -153,8 +210,8 @@ function MainShell() {
           bankB={app.resolvedProfile.effectiveBankB}
           finalizedPreview={app.finalizedPreview}
           isPasteReady={app.runtime.nativePasteReady}
-          isHotkeysPaused={app.settings.panicModeEnabled}
-          hasHotkeyWarnings={app.hotkeyConflicts.length > 0}
+          isHotkeysPaused={isPaused}
+          hasHotkeyWarnings={hasWarnings}
           onEditSlot={(slotRef) =>
             app.editSlot(
               { bankId: slotRef.bankId, slotIndex: slotRef.slotIndex },
@@ -174,7 +231,7 @@ function MainShell() {
           onQueueSuper={app.queueSuper}
         />
 
-        {app.shellMode === "editor" ? (
+        {app.shellMode === "editor" && (
           <EditorShell
             comboState={app.comboState}
             editorProfileId={app.editorProfileId}
@@ -194,17 +251,25 @@ function MainShell() {
             settings={app.settings}
             slotSelection={app.slotSelection}
           />
-        ) : null}
+        )}
       </section>
 
+      {/* ============================================
+          STATUS BAR
+          ============================================ */}
       <StatusBar
         activeApp={app.activeWindow.processName || app.activeWindow.title}
         comboCount={app.comboState.queuedEntries.length}
         hotkeyStatus={app.hotkeySummary}
-        hotkeyWarnings={app.hotkeyConflicts.map((conflict) => `${conflict.binding} (${conflict.reasons.join(", ")})`)}
-        profileModeLabel={profileModeLabel}
+        hotkeyWarnings={app.hotkeyConflicts.map(
+          (conflict) => `${conflict.binding} (${conflict.reasons.join(", ")})`,
+        )}
+        isManualOverride={!!app.settings.activeProfileIdOverride}
       />
 
+      {/* ============================================
+          OVERLAYS
+          ============================================ */}
       <ToastRail message={app.lastActionMessage} />
 
       <HelpOverlay
@@ -224,7 +289,10 @@ function MainShell() {
 }
 
 function App() {
-  const view = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("view") : null;
+  const view =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("view")
+      : null;
   return view === "harness" ? <TestHarnessWindow /> : <MainShell />;
 }
 

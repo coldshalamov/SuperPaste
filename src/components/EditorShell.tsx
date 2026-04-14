@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 import {
   AppSettings,
   ComboBufferState,
@@ -15,11 +15,8 @@ import {
   Trash2,
   Upload,
   Download,
-  FileJson,
-  Sliders,
-  BookOpen,
-  Puzzle,
-  Wrench,
+  ChevronDown,
+  ChevronRight,
   AlertTriangle,
   Zap,
 } from "lucide-react";
@@ -70,6 +67,41 @@ type EditorShellProps = {
 
 const NEW_RECIPE_ID = "__new_recipe__";
 
+function CollapsibleSection({
+  title,
+  defaultOpen = true,
+  children,
+  badge,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+  badge?: React.ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div className="border-b border-[var(--color-border-subtle)] last:border-b-0">
+      <button
+        className="collapse-header w-full text-left"
+        onClick={() => setIsOpen(!isOpen)}
+        type="button"
+      >
+        <div className="flex items-center gap-2">
+          {isOpen ? (
+            <ChevronDown size={12} className="text-[var(--color-text-muted)]" />
+          ) : (
+            <ChevronRight size={12} className="text-[var(--color-text-muted)]" />
+          )}
+          <span className="section-title text-sm">{title}</span>
+        </div>
+        {badge}
+      </button>
+      {isOpen && <div className="pb-3">{children}</div>}
+    </div>
+  );
+}
+
 function createRule() {
   return {
     id: `rule-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
@@ -83,7 +115,7 @@ function createRule() {
 function createEmptyRecipeDraft(): RecipeDraft {
   return {
     id: null,
-    name: "New combo super",
+    name: "New super",
     description: "",
     assemblyJoiner: "\n\n",
     hotkeyHint: "",
@@ -112,11 +144,9 @@ function recipeEntriesFromCombo(comboState: ComboBufferState) {
     if (entry.type === "slot" && entry.slotRef) {
       return [{ type: "slot", slotRef: entry.slotRef }];
     }
-
     if (entry.type === "super" && entry.superId) {
       return [{ type: "super", superId: entry.superId }];
     }
-
     return [];
   });
 
@@ -141,12 +171,7 @@ function updateSelectedSlot(
     [bankKey]: {
       ...bank,
       slots: bank.slots.map((slot) =>
-        slot.slotIndex === selection.slotIndex
-          ? {
-              ...slot,
-              ...patch,
-            }
-          : slot,
+        slot.slotIndex === selection.slotIndex ? { ...slot, ...patch } : slot,
       ),
     },
   };
@@ -176,9 +201,13 @@ export function EditorShell({
   const [settingsDraft, setSettingsDraft] = useState<AppSettings>(settings);
   const [profileDirty, setProfileDirty] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
-  const [recipeSelectionId, setRecipeSelectionId] = useState<string>(profile.supers[0]?.id ?? NEW_RECIPE_ID);
+  const [recipeSelectionId, setRecipeSelectionId] = useState<string>(
+    profile.supers[0]?.id ?? NEW_RECIPE_ID,
+  );
   const [recipeDraft, setRecipeDraft] = useState<RecipeDraft>(
-    profile.supers[0] ? createRecipeDraftFromProfile(profile, profile.supers[0].id) : createEmptyRecipeDraft(),
+    profile.supers[0]
+      ? createRecipeDraftFromProfile(profile, profile.supers[0].id)
+      : createEmptyRecipeDraft(),
   );
   const [recipeError, setRecipeError] = useState("");
 
@@ -188,7 +217,9 @@ export function EditorShell({
     const nextRecipeId = profile.supers[0]?.id ?? NEW_RECIPE_ID;
     setRecipeSelectionId(nextRecipeId);
     setRecipeDraft(
-      nextRecipeId === NEW_RECIPE_ID ? createEmptyRecipeDraft() : createRecipeDraftFromProfile(profile, nextRecipeId),
+      nextRecipeId === NEW_RECIPE_ID
+        ? createEmptyRecipeDraft()
+        : createRecipeDraftFromProfile(profile, nextRecipeId),
     );
     setRecipeError("");
   }, [profile]);
@@ -211,19 +242,15 @@ export function EditorShell({
   const slot = bank.slots.find((entry) => entry.slotIndex === slotSelection.slotIndex)!;
 
   const pasteHotkeys =
-    slotSelection.bankId === "A" ? settingsDraft.hotkeys.bankAPaste : settingsDraft.hotkeys.bankBPaste;
+    slotSelection.bankId === "A"
+      ? settingsDraft.hotkeys.bankAPaste
+      : settingsDraft.hotkeys.bankBPaste;
   const saveHotkeys =
     slotSelection.bankId === "A"
       ? settingsDraft.hotkeys.bankASaveClipboard
       : settingsDraft.hotkeys.bankBSaveClipboard;
 
-  const quickProfileLabel = useMemo(() => {
-    if (profileDraft.id === resolvedProfileId) {
-      return "Editing active profile";
-    }
-
-    return "Editing inactive profile";
-  }, [profileDraft.id, resolvedProfileId]);
+  const isEditingActive = profileDraft.id === resolvedProfileId;
 
   async function handleSaveRecipe() {
     try {
@@ -237,488 +264,414 @@ export function EditorShell({
       });
       setRecipeError("");
     } catch (error) {
-      setRecipeError(error instanceof Error ? error.message : "Could not parse recipe steps.");
+      setRecipeError(error instanceof Error ? error.message : "Invalid steps");
     }
   }
 
-  return (
-    <aside className="editor-column animate-slide-up scrollbar-thin">
-      <article className="card">
-        <header className="surface-header">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--color-bg-surface)]">
-              <Sliders size={14} className="text-[var(--color-text-muted)]" />
-            </div>
-            <div>
-              <p className="section-label">Editor</p>
-              <h2>Loadout editor</h2>
-            </div>
-          </div>
-          <span className={`badge text-xs ${profileDraft.id === resolvedProfileId ? "badge-accent-a" : ""}`}>
-            {quickProfileLabel}
-          </span>
-        </header>
+  async function handleSaveAll() {
+    if (profileDirty) await onSaveProfile(profileDraft);
+    if (settingsDirty) await onSaveSettings(settingsDraft);
+  }
 
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <label className="field-block">
-            <span className="field-caption">Profile</span>
-            <select onChange={(event) => onEditorProfileChange(event.target.value)} value={profileDraft.id}>
+  const hasPendingChanges = profileDirty || settingsDirty;
+
+  return (
+    <aside className="editor-column scrollbar-thin">
+      {/* ============================================
+          PROFILE HEADER
+          ============================================ */}
+      <article className="card">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex-1">
+            <select
+              className="w-full"
+              onChange={(event) => onEditorProfileChange(event.target.value)}
+              value={profileDraft.id}
+            >
               {profiles.map((entry) => (
                 <option key={entry.id} value={entry.id}>
                   {entry.name}
                 </option>
               ))}
             </select>
-          </label>
+          </div>
+          <span
+            className={`badge text-[0.6rem] ${isEditingActive ? "badge-success" : ""}`}
+          >
+            {isEditingActive ? "Active" : "Inactive"}
+          </span>
+        </div>
 
-          <label className="field-block">
-            <span className="field-caption">Scope</span>
-            <select
-              onChange={(event) => {
-                setProfileDraft({
-                  ...profileDraft,
-                  kind: event.target.value as Profile["kind"],
-                });
-                setProfileDirty(true);
-              }}
-              value={profileDraft.kind}
+        {hasPendingChanges && (
+          <div className="flex items-center gap-2 mb-3 p-2 rounded-md bg-[var(--color-warning-dim)] border border-[var(--color-warning-border)]">
+            <span className="text-xs text-[var(--color-warning)]">Unsaved changes</span>
+            <div className="flex-1" />
+            <button
+              className="btn btn-xs btn-warning"
+              onClick={() => void handleSaveAll()}
+              type="button"
             >
-              <option value="global">Global</option>
-              <option value="workspace">Workspace</option>
-            </select>
-          </label>
-
-          <label className="field-block col-span-2">
-            <span className="field-caption">Profile name</span>
-            <input
-              onChange={(event) => {
-                setProfileDraft({
-                  ...profileDraft,
-                  name: event.target.value,
-                });
-                setProfileDirty(true);
+              <Save size={11} />
+              Save all
+            </button>
+            <button
+              className="btn btn-xs btn-ghost"
+              onClick={() => {
+                setProfileDraft(profile);
+                setSettingsDraft(settings);
+                setProfileDirty(false);
+                setSettingsDirty(false);
               }}
-              value={profileDraft.name}
-            />
-          </label>
-
-          <label className="field-block col-span-2">
-            <span className="field-caption">Profile description</span>
-            <input
-              onChange={(event) => {
-                setProfileDraft({
-                  ...profileDraft,
-                  description: event.target.value,
-                });
-                setProfileDirty(true);
-              }}
-              value={profileDraft.description}
-            />
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Priority</span>
-            <input
-              onChange={(event) => {
-                setProfileDraft({
-                  ...profileDraft,
-                  priority: Number(event.target.value) || 0,
-                });
-                setProfileDirty(true);
-              }}
-              type="number"
-              value={profileDraft.priority}
-            />
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Default joiner</span>
-            <input
-              onChange={(event) => {
-                setProfileDraft({
-                  ...profileDraft,
-                  assembly: {
-                    style: "markdown",
-                    joiner: event.target.value,
-                  },
-                });
-                setProfileDirty(true);
-              }}
-              value={profileDraft.assembly?.joiner ?? "\n\n"}
-            />
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Parent profile</span>
-            <select
-              onChange={(event) => {
-                setProfileDraft({
-                  ...profileDraft,
-                  extendsProfileId: event.target.value || null,
-                });
-                setProfileDirty(true);
-              }}
-              value={profileDraft.extendsProfileId ?? ""}
+              type="button"
             >
-              <option value="">No parent</option>
-              {profiles
-                .filter((entry) => entry.id !== profileDraft.id)
-                .map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.name}
+              <RotateCcw size={11} />
+            </button>
+          </div>
+        )}
+
+        {/* ============================================
+            SLOT EDITOR
+            ============================================ */}
+        <CollapsibleSection title="Slot Editor">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="field-block">
+              <span className="field-caption">Bank</span>
+              <select
+                onChange={(event) =>
+                  onSelectSlot({
+                    bankId: event.target.value as "A" | "B",
+                    slotIndex: slotSelection.slotIndex,
+                  })
+                }
+                value={slotSelection.bankId}
+              >
+                <option value="A">Bank A</option>
+                <option value="B">Bank B</option>
+              </select>
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Slot</span>
+              <select
+                onChange={(event) =>
+                  onSelectSlot({
+                    bankId: slotSelection.bankId,
+                    slotIndex: Number(event.target.value),
+                  })
+                }
+                value={slotSelection.slotIndex}
+              >
+                {Array.from({ length: 10 }, (_, i) => (
+                  <option key={i} value={i}>
+                    {slotSelection.bankId}
+                    {getSlotHotkeyDigit(i)}
                   </option>
                 ))}
-            </select>
-          </label>
+              </select>
+            </label>
 
-          <label className="field-block">
-            <span className="field-caption">Bank</span>
-            <select
-              onChange={(event) =>
-                onSelectSlot({
-                  bankId: event.target.value as "A" | "B",
-                  slotIndex: slotSelection.slotIndex,
-                })
-              }
-              value={slotSelection.bankId}
-            >
-              <option value="A">Bank A</option>
-              <option value="B">Bank B</option>
-            </select>
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Slot</span>
-            <select
-              onChange={(event) =>
-                onSelectSlot({
-                  bankId: slotSelection.bankId,
-                  slotIndex: Number(event.target.value),
-                })
-              }
-              value={slotSelection.slotIndex}
-            >
-              {Array.from({ length: 10 }, (_, slotIndex) => (
-                <option key={slotIndex} value={slotIndex}>
-                  {slotSelection.bankId}
-                  {getSlotHotkeyDigit(slotIndex)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Enabled</span>
-            <select
-              onChange={(event) => {
-                setProfileDraft(updateSelectedSlot(profileDraft, slotSelection, { enabled: event.target.value === "true" }));
-                setProfileDirty(true);
-              }}
-              value={String(slot.enabled)}
-            >
-              <option value="true">Enabled</option>
-              <option value="false">Disabled</option>
-            </select>
-          </label>
-
-          <label className="field-block col-span-2">
-            <span className="field-caption">Slot label</span>
-            <input
-              onChange={(event) => {
-                setProfileDraft(updateSelectedSlot(profileDraft, slotSelection, { label: event.target.value }));
-                setProfileDirty(true);
-              }}
-              value={slot.label}
-            />
-          </label>
-
-          <label className="field-block col-span-2">
-            <span className="field-caption">Slot description</span>
-            <input
-              onChange={(event) => {
-                setProfileDraft(updateSelectedSlot(profileDraft, slotSelection, { description: event.target.value }));
-                setProfileDirty(true);
-              }}
-              value={slot.description}
-            />
-          </label>
-
-          <label className="field-block col-span-2">
-            <span className="field-caption">Slot content</span>
-            <textarea
-              onChange={(event) => {
-                setProfileDraft(updateSelectedSlot(profileDraft, slotSelection, { content: event.target.value }));
-                setProfileDirty(true);
-              }}
-              value={slot.content}
-              className="font-mono text-sm"
-            />
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Template mode</span>
-            <select
-              onChange={(event) => {
-                setProfileDraft(
-                  updateSelectedSlot(profileDraft, slotSelection, {
-                    templateMode: event.target.value as SlotDefinition["templateMode"],
-                  }),
-                );
-                setProfileDirty(true);
-              }}
-              value={slot.templateMode}
-            >
-              <option value="plain">Plain text</option>
-              <option value="template">Template variables</option>
-            </select>
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Assembly role</span>
-            <select
-              onChange={(event) => {
-                setProfileDraft(
-                  updateSelectedSlot(profileDraft, slotSelection, {
-                    assemblyMode: event.target.value as SlotDefinition["assemblyMode"],
-                  }),
-                );
-                setProfileDirty(true);
-              }}
-              value={slot.assemblyMode}
-            >
-              <option value="append">Append</option>
-              <option value="prepend">Prepend</option>
-              <option value="wrap">Wrap</option>
-            </select>
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Paste hotkey</span>
-            <input
-              onChange={(event) => {
-                const nextBindings = [...pasteHotkeys];
-                nextBindings[slotSelection.slotIndex] = event.target.value;
-                setSettingsDraft({
-                  ...settingsDraft,
-                  hotkeys: {
-                    ...settingsDraft.hotkeys,
-                    ...(slotSelection.bankId === "A"
-                      ? { bankAPaste: nextBindings }
-                      : { bankBPaste: nextBindings }),
-                  },
-                });
-                setSettingsDirty(true);
-              }}
-              value={pasteHotkeys[slotSelection.slotIndex]}
-            />
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Save clipboard hotkey</span>
-            <input
-              onChange={(event) => {
-                const nextBindings = [...saveHotkeys];
-                nextBindings[slotSelection.slotIndex] = event.target.value;
-                setSettingsDraft({
-                  ...settingsDraft,
-                  hotkeys: {
-                    ...settingsDraft.hotkeys,
-                    ...(slotSelection.bankId === "A"
-                      ? { bankASaveClipboard: nextBindings }
-                      : { bankBSaveClipboard: nextBindings }),
-                  },
-                });
-                setSettingsDirty(true);
-              }}
-              value={saveHotkeys[slotSelection.slotIndex]}
-            />
-          </label>
-
-          {slotSelection.bankId === "B" ? (
-            <label className="field-block">
-              <span className="field-caption">Inheritance</span>
-              <select
+            <label className="field-block col-span-2">
+              <span className="field-caption">Label</span>
+              <input
                 onChange={(event) => {
                   setProfileDraft(
                     updateSelectedSlot(profileDraft, slotSelection, {
-                      inheritanceMode: event.target.value as SlotDefinition["inheritanceMode"],
+                      label: event.target.value,
                     }),
                   );
                   setProfileDirty(true);
                 }}
-                value={slot.inheritanceMode}
+                value={slot.label}
+                placeholder="Slot name"
+              />
+            </label>
+
+            <label className="field-block col-span-2">
+              <span className="field-caption">Content</span>
+              <textarea
+                onChange={(event) => {
+                  setProfileDraft(
+                    updateSelectedSlot(profileDraft, slotSelection, {
+                      content: event.target.value,
+                    }),
+                  );
+                  setProfileDirty(true);
+                }}
+                value={slot.content}
+                className="font-mono text-xs"
+                rows={5}
+              />
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Template</span>
+              <select
+                onChange={(event) => {
+                  setProfileDraft(
+                    updateSelectedSlot(profileDraft, slotSelection, {
+                      templateMode: event.target.value as SlotDefinition["templateMode"],
+                    }),
+                  );
+                  setProfileDirty(true);
+                }}
+                value={slot.templateMode}
               >
-                <option value="inherit">Inherit global Bank B</option>
-                <option value="override">Override locally</option>
+                <option value="plain">Plain</option>
+                <option value="template">Variables</option>
               </select>
             </label>
-          ) : null}
-        </div>
 
-        <div className="flex flex-wrap gap-2 mt-3">
-          <button className="btn btn-accent-a btn-sm" disabled={!profileDirty} onClick={() => void onSaveProfile(profileDraft)} type="button">
-            <Save size={13} />
-            Save profile
-          </button>
-          <button
-            className="btn btn-ghost btn-sm"
-            disabled={!profileDirty}
-            onClick={() => {
-              setProfileDraft(profile);
-              setProfileDirty(false);
-            }}
-            type="button"
-          >
-            <RotateCcw size={13} />
-            Revert
-          </button>
-        </div>
-      </article>
-
-      <article className="card">
-        <header className="surface-header">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--color-bg-surface)]">
-              <BookOpen size={14} className="text-[var(--color-text-muted)]" />
-            </div>
-            <div>
-              <p className="section-label">Matching rules</p>
-              <h2>Profile auto-switch logic</h2>
-            </div>
-          </div>
-        </header>
-
-        <div className="flex flex-col gap-2 mt-3">
-          {profileDraft.matchRules.map((rule, index) => (
-            <div className="grid grid-cols-[1.2fr_1.8fr_100px_auto_auto] gap-2 items-center" key={rule.id}>
+            <label className="field-block">
+              <span className="field-caption">Assembly</span>
               <select
-                aria-label={`Rule ${index + 1} kind`}
                 onChange={(event) => {
-                  const nextRules = [...profileDraft.matchRules];
-                  nextRules[index] = {
-                    ...nextRules[index],
-                    kind: event.target.value as Profile["matchRules"][number]["kind"],
-                  };
-                  setProfileDraft({ ...profileDraft, matchRules: nextRules });
+                  setProfileDraft(
+                    updateSelectedSlot(profileDraft, slotSelection, {
+                      assemblyMode: event.target.value as SlotDefinition["assemblyMode"],
+                    }),
+                  );
                   setProfileDirty(true);
                 }}
-                value={rule.kind}
+                value={slot.assemblyMode}
               >
-                <option value="workspacePathEquals">Workspace path equals</option>
-                <option value="workspacePathContains">Workspace path contains</option>
-                <option value="processName">Process name</option>
-                <option value="processPathContains">Process path contains</option>
-                <option value="windowTitleContains">Window title contains</option>
+                <option value="append">Append</option>
+                <option value="prepend">Prepend</option>
+                <option value="wrap">Wrap</option>
               </select>
+            </label>
 
-              <input
-                aria-label={`Rule ${index + 1} value`}
+            <label className="field-block">
+              <span className="field-caption">Enabled</span>
+              <select
                 onChange={(event) => {
-                  const nextRules = [...profileDraft.matchRules];
-                  nextRules[index] = {
-                    ...nextRules[index],
-                    value: event.target.value,
-                  };
-                  setProfileDraft({ ...profileDraft, matchRules: nextRules });
+                  setProfileDraft(
+                    updateSelectedSlot(profileDraft, slotSelection, {
+                      enabled: event.target.value === "true",
+                    }),
+                  );
                   setProfileDirty(true);
                 }}
-                value={rule.value}
-              />
+                value={String(slot.enabled)}
+              >
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </label>
 
+            {slotSelection.bankId === "B" && (
+              <label className="field-block">
+                <span className="field-caption">Inherit</span>
+                <select
+                  onChange={(event) => {
+                    setProfileDraft(
+                      updateSelectedSlot(profileDraft, slotSelection, {
+                        inheritanceMode: event.target
+                          .value as SlotDefinition["inheritanceMode"],
+                      }),
+                    );
+                    setProfileDirty(true);
+                  }}
+                  value={slot.inheritanceMode}
+                >
+                  <option value="inherit">Global</option>
+                  <option value="override">Override</option>
+                </select>
+              </label>
+            )}
+          </div>
+        </CollapsibleSection>
+
+        {/* ============================================
+            PROFILE SETTINGS
+            ============================================ */}
+        <CollapsibleSection title="Profile Settings" defaultOpen={false}>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="field-block col-span-2">
+              <span className="field-caption">Name</span>
               <input
-                aria-label={`Rule ${index + 1} weight`}
                 onChange={(event) => {
-                  const nextRules = [...profileDraft.matchRules];
-                  nextRules[index] = {
-                    ...nextRules[index],
-                    weightBoost: Number(event.target.value) || 0,
-                  };
-                  setProfileDraft({ ...profileDraft, matchRules: nextRules });
+                  setProfileDraft({ ...profileDraft, name: event.target.value });
+                  setProfileDirty(true);
+                }}
+                value={profileDraft.name}
+              />
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Scope</span>
+              <select
+                onChange={(event) => {
+                  setProfileDraft({
+                    ...profileDraft,
+                    kind: event.target.value as Profile["kind"],
+                  });
+                  setProfileDirty(true);
+                }}
+                value={profileDraft.kind}
+              >
+                <option value="global">Global</option>
+                <option value="workspace">Workspace</option>
+              </select>
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Priority</span>
+              <input
+                onChange={(event) => {
+                  setProfileDraft({
+                    ...profileDraft,
+                    priority: Number(event.target.value) || 0,
+                  });
                   setProfileDirty(true);
                 }}
                 type="number"
-                value={rule.weightBoost}
+                value={profileDraft.priority}
               />
+            </label>
 
-              <label className="flex items-center gap-1.5 text-[var(--color-text-muted)] text-xs cursor-pointer">
-                <input
-                  checked={rule.caseSensitive}
+            <label className="field-block">
+              <span className="field-caption">Parent</span>
+              <select
+                onChange={(event) => {
+                  setProfileDraft({
+                    ...profileDraft,
+                    extendsProfileId: event.target.value || null,
+                  });
+                  setProfileDirty(true);
+                }}
+                value={profileDraft.extendsProfileId ?? ""}
+              >
+                <option value="">None</option>
+                {profiles
+                  .filter((entry) => entry.id !== profileDraft.id)
+                  .map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Joiner</span>
+              <input
+                onChange={(event) => {
+                  setProfileDraft({
+                    ...profileDraft,
+                    assembly: { style: "markdown", joiner: event.target.value },
+                  });
+                  setProfileDirty(true);
+                }}
+                value={profileDraft.assembly?.joiner ?? "\n\n"}
+                placeholder="\n\n"
+              />
+            </label>
+          </div>
+        </CollapsibleSection>
+
+        {/* ============================================
+            MATCH RULES
+            ============================================ */}
+        <CollapsibleSection
+          title="Match Rules"
+          defaultOpen={false}
+          badge={
+            profileDraft.matchRules.length > 0 && (
+              <span className="badge text-[0.55rem]">
+                {profileDraft.matchRules.length}
+              </span>
+            )
+          }
+        >
+          <div className="flex flex-col gap-2">
+            {profileDraft.matchRules.map((rule, index) => (
+              <div key={rule.id} className="grid grid-cols-[1fr_1.5fr_auto] gap-1.5 items-center">
+                <select
+                  className="text-xs"
                   onChange={(event) => {
                     const nextRules = [...profileDraft.matchRules];
                     nextRules[index] = {
                       ...nextRules[index],
-                      caseSensitive: event.target.checked,
+                      kind: event.target.value as Profile["matchRules"][number]["kind"],
                     };
                     setProfileDraft({ ...profileDraft, matchRules: nextRules });
                     setProfileDirty(true);
                   }}
-                  type="checkbox"
-                  className="w-auto"
+                  value={rule.kind}
+                >
+                  <option value="workspacePathEquals">Path =</option>
+                  <option value="workspacePathContains">Path ~</option>
+                  <option value="processName">Process</option>
+                  <option value="processPathContains">Proc path</option>
+                  <option value="windowTitleContains">Title ~</option>
+                </select>
+
+                <input
+                  className="text-xs"
+                  onChange={(event) => {
+                    const nextRules = [...profileDraft.matchRules];
+                    nextRules[index] = { ...nextRules[index], value: event.target.value };
+                    setProfileDraft({ ...profileDraft, matchRules: nextRules });
+                    setProfileDirty(true);
+                  }}
+                  value={rule.value}
+                  placeholder="Match value"
                 />
-                Case
-              </label>
 
-              <button
-                className="btn btn-sm btn-ghost btn-icon text-[var(--color-text-muted)]"
-                onClick={() => {
-                  setProfileDraft({
-                    ...profileDraft,
-                    matchRules: profileDraft.matchRules.filter((_, ruleIndex) => ruleIndex !== index),
-                  });
-                  setProfileDirty(true);
-                }}
-                type="button"
-                title="Remove rule"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ))}
-        </div>
+                <button
+                  className="btn btn-xs btn-ghost btn-icon"
+                  onClick={() => {
+                    setProfileDraft({
+                      ...profileDraft,
+                      matchRules: profileDraft.matchRules.filter((_, i) => i !== index),
+                    });
+                    setProfileDirty(true);
+                  }}
+                  type="button"
+                  title="Remove"
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
+            ))}
 
-        <div className="flex flex-wrap gap-2 mt-3">
-          <button
-            className="btn btn-sm"
-            onClick={() => {
-              setProfileDraft({
-                ...profileDraft,
-                matchRules: [...profileDraft.matchRules, createRule()],
-              });
-              setProfileDirty(true);
-            }}
-            type="button"
-          >
-            <Plus size={13} />
-            Add rule
-          </button>
-          <button className="btn btn-accent-a btn-sm" disabled={!profileDirty} onClick={() => void onSaveProfile(profileDraft)} type="button">
-            <Save size={13} />
-            Save rules
-          </button>
-        </div>
+            <button
+              className="btn btn-xs btn-ghost"
+              onClick={() => {
+                setProfileDraft({
+                  ...profileDraft,
+                  matchRules: [...profileDraft.matchRules, createRule()],
+                });
+                setProfileDirty(true);
+              }}
+              type="button"
+            >
+              <Plus size={11} />
+              Add rule
+            </button>
+          </div>
+        </CollapsibleSection>
       </article>
 
+      {/* ============================================
+          SUPERS / RECIPES
+          ============================================ */}
       <article className="card">
-        <header className="surface-header">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--color-accent-a-dim)]">
-              <Puzzle size={14} className="text-[var(--color-accent-a)]" />
-            </div>
-            <div>
-              <p className="section-label !text-[var(--color-accent-a)]">Recipes</p>
-              <h2>Supers / saved combos</h2>
-            </div>
+        <div className="surface-header">
+          <div className="flex items-center gap-2">
+            <Zap size={12} className="text-[var(--color-accent-a)]" />
+            <span className="section-title">Supers</span>
           </div>
-          <span className="badge badge-accent-a text-xs">
-            Capture current combo into a reusable move
-          </span>
-        </header>
+        </div>
 
-        <div className="grid grid-cols-2 gap-3 mt-3">
+        <div className="grid grid-cols-2 gap-2 mb-3">
           <label className="field-block">
             <span className="field-caption">Recipe</span>
-            <select onChange={(event) => setRecipeSelectionId(event.target.value)} value={recipeSelectionId}>
-              <option value={NEW_RECIPE_ID}>New recipe</option>
+            <select
+              onChange={(event) => setRecipeSelectionId(event.target.value)}
+              value={recipeSelectionId}
+            >
+              <option value={NEW_RECIPE_ID}>+ New</option>
               {profileDraft.supers.map((recipe) => (
                 <option key={recipe.id} value={recipe.id}>
                   {recipe.name}
@@ -728,262 +681,208 @@ export function EditorShell({
           </label>
 
           <label className="field-block">
-            <span className="field-caption">Hotkey hint</span>
+            <span className="field-caption">Name</span>
             <input
-              onChange={(event) => setRecipeDraft({ ...recipeDraft, hotkeyHint: event.target.value })}
-              placeholder="Optional metadata"
-              value={recipeDraft.hotkeyHint}
-            />
-          </label>
-
-          <label className="field-block col-span-2">
-            <span className="field-caption">Recipe name</span>
-            <input
-              onChange={(event) => setRecipeDraft({ ...recipeDraft, name: event.target.value })}
+              onChange={(event) =>
+                setRecipeDraft({ ...recipeDraft, name: event.target.value })
+              }
               value={recipeDraft.name}
             />
           </label>
 
           <label className="field-block col-span-2">
-            <span className="field-caption">Recipe description</span>
-            <input
-              onChange={(event) => setRecipeDraft({ ...recipeDraft, description: event.target.value })}
-              value={recipeDraft.description}
-            />
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Recipe joiner</span>
-            <input
-              onChange={(event) => setRecipeDraft({ ...recipeDraft, assemblyJoiner: event.target.value })}
-              value={recipeDraft.assemblyJoiner}
-            />
-          </label>
-
-          <label className="field-block col-span-2">
-            <span className="field-caption">Steps</span>
+            <span className="field-caption">
+              Steps <span className="opacity-50">(A1 &gt; B2 &gt; super:name)</span>
+            </span>
             <textarea
-              onChange={(event) => setRecipeDraft({ ...recipeDraft, stepText: event.target.value })}
-              placeholder="A2 > B4 > super:checkout-bughunt-super"
+              onChange={(event) =>
+                setRecipeDraft({ ...recipeDraft, stepText: event.target.value })
+              }
               value={recipeDraft.stepText}
-              className="font-mono text-sm"
-              style={{ minHeight: "6rem" }}
+              className="font-mono text-xs"
+              rows={3}
+              placeholder="A1 > A2 > B1"
             />
           </label>
         </div>
 
-        {recipeError ? (
-          <p className="flex items-center gap-1.5 mt-2 text-sm text-[var(--color-warning)]">
-            <AlertTriangle size={13} />
+        {recipeError && (
+          <p className="flex items-center gap-1.5 mb-2 text-xs text-[var(--color-warning)]">
+            <AlertTriangle size={11} />
             {recipeError}
           </p>
-        ) : null}
+        )}
 
-        <div className="flex flex-wrap gap-2 mt-3">
+        <div className="flex flex-wrap gap-1.5">
           <button
-            className="btn btn-sm"
+            className="btn btn-xs btn-ghost"
             onClick={() => {
               const captured = recipeEntriesFromCombo(comboState);
-              setRecipeDraft({
-                ...recipeDraft,
-                stepText: serializeRecipeSteps(captured),
-              });
+              setRecipeDraft({ ...recipeDraft, stepText: serializeRecipeSteps(captured) });
             }}
             type="button"
           >
-            <Zap size={13} />
-            Capture combo
-          </button>
-          <button className="btn btn-accent-a btn-sm" onClick={() => void handleSaveRecipe()} type="button">
-            <Save size={13} />
-            Save recipe
-          </button>
-          {recipeDraft.id ? (
-            <button className="btn btn-danger btn-sm" onClick={() => void onDeleteRecipe(profileDraft.id, recipeDraft.id!)} type="button">
-              <Trash2 size={13} />
-              Delete
-            </button>
-          ) : null}
-        </div>
-      </article>
-
-      <article className="card">
-        <header className="surface-header">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--color-bg-surface)]">
-              <Wrench size={14} className="text-[var(--color-text-muted)]" />
-            </div>
-            <div>
-              <p className="section-label">Runtime</p>
-              <h2>Runtime + hotkeys</h2>
-            </div>
-          </div>
-        </header>
-
-        <div className="grid grid-cols-2 gap-3 mt-3 settings-grid">
-          <label className="field-block">
-            <span className="field-caption">Clipboard restore</span>
-            <select
-              onChange={(event) => {
-                setSettingsDraft({
-                  ...settingsDraft,
-                  restoreClipboardAfterPaste: event.target.value === "true",
-                });
-                setSettingsDirty(true);
-              }}
-              value={String(settingsDraft.restoreClipboardAfterPaste)}
-            >
-              <option value="true">Restore clipboard</option>
-              <option value="false">Leave assembled text</option>
-            </select>
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Hotkey state</span>
-            <select
-              onChange={(event) => {
-                setSettingsDraft({
-                  ...settingsDraft,
-                  panicModeEnabled: event.target.value === "true",
-                });
-                setSettingsDirty(true);
-              }}
-              value={String(settingsDraft.panicModeEnabled)}
-            >
-              <option value="false">Live</option>
-              <option value="true">Paused</option>
-            </select>
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Finalize combo</span>
-            <input
-              onChange={(event) => {
-                setSettingsDraft({
-                  ...settingsDraft,
-                  hotkeys: {
-                    ...settingsDraft.hotkeys,
-                    finalizeCombo: event.target.value,
-                  },
-                });
-                setSettingsDirty(true);
-              }}
-              value={settingsDraft.hotkeys.finalizeCombo}
-            />
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Cancel combo</span>
-            <input
-              onChange={(event) => {
-                setSettingsDraft({
-                  ...settingsDraft,
-                  hotkeys: {
-                    ...settingsDraft.hotkeys,
-                    cancelCombo: event.target.value,
-                  },
-                });
-                setSettingsDirty(true);
-              }}
-              value={settingsDraft.hotkeys.cancelCombo}
-            />
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Replay last combo</span>
-            <input
-              onChange={(event) => {
-                setSettingsDraft({
-                  ...settingsDraft,
-                  hotkeys: {
-                    ...settingsDraft.hotkeys,
-                    replayLastCombo: event.target.value,
-                  },
-                });
-                setSettingsDirty(true);
-              }}
-              value={settingsDraft.hotkeys.replayLastCombo}
-            />
-          </label>
-
-          <label className="field-block">
-            <span className="field-caption">Toggle window</span>
-            <input
-              onChange={(event) => {
-                setSettingsDraft({
-                  ...settingsDraft,
-                  hotkeys: {
-                    ...settingsDraft.hotkeys,
-                    toggleWindow: event.target.value,
-                  },
-                });
-                setSettingsDirty(true);
-              }}
-              value={settingsDraft.hotkeys.toggleWindow}
-            />
-          </label>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mt-3">
-          <button className="btn btn-accent-a btn-sm" disabled={!settingsDirty} onClick={() => void onSaveSettings(settingsDraft)} type="button">
-            <Save size={13} />
-            Save runtime
+            <Zap size={11} />
+            Capture
           </button>
           <button
-            className="btn btn-ghost btn-sm"
-            disabled={!settingsDirty}
-            onClick={() => {
-              setSettingsDraft(settings);
-              setSettingsDirty(false);
-            }}
+            className="btn btn-xs btn-accent-a"
+            onClick={() => void handleSaveRecipe()}
             type="button"
           >
-            <RotateCcw size={13} />
-            Revert
+            <Save size={11} />
+            Save
           </button>
+          {recipeDraft.id && (
+            <button
+              className="btn btn-xs btn-danger"
+              onClick={() => void onDeleteRecipe(profileDraft.id, recipeDraft.id!)}
+              type="button"
+            >
+              <Trash2 size={11} />
+            </button>
+          )}
         </div>
       </article>
 
+      {/* ============================================
+          HOTKEYS
+          ============================================ */}
       <article className="card">
-        <header className="surface-header">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--color-bg-surface)]">
-              <FileJson size={14} className="text-[var(--color-text-muted)]" />
-            </div>
-            <div>
-              <p className="section-label">Portable packs</p>
-              <h2>Import / export JSON</h2>
-            </div>
+        <CollapsibleSection title="Hotkeys" defaultOpen={false}>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="field-block">
+              <span className="field-caption">Paste hotkey</span>
+              <input
+                className="text-xs font-mono"
+                onChange={(event) => {
+                  const nextBindings = [...pasteHotkeys];
+                  nextBindings[slotSelection.slotIndex] = event.target.value;
+                  setSettingsDraft({
+                    ...settingsDraft,
+                    hotkeys: {
+                      ...settingsDraft.hotkeys,
+                      ...(slotSelection.bankId === "A"
+                        ? { bankAPaste: nextBindings }
+                        : { bankBPaste: nextBindings }),
+                    },
+                  });
+                  setSettingsDirty(true);
+                }}
+                value={pasteHotkeys[slotSelection.slotIndex]}
+              />
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Save hotkey</span>
+              <input
+                className="text-xs font-mono"
+                onChange={(event) => {
+                  const nextBindings = [...saveHotkeys];
+                  nextBindings[slotSelection.slotIndex] = event.target.value;
+                  setSettingsDraft({
+                    ...settingsDraft,
+                    hotkeys: {
+                      ...settingsDraft.hotkeys,
+                      ...(slotSelection.bankId === "A"
+                        ? { bankASaveClipboard: nextBindings }
+                        : { bankBSaveClipboard: nextBindings }),
+                    },
+                  });
+                  setSettingsDirty(true);
+                }}
+                value={saveHotkeys[slotSelection.slotIndex]}
+              />
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Finalize</span>
+              <input
+                className="text-xs font-mono"
+                onChange={(event) => {
+                  setSettingsDraft({
+                    ...settingsDraft,
+                    hotkeys: { ...settingsDraft.hotkeys, finalizeCombo: event.target.value },
+                  });
+                  setSettingsDirty(true);
+                }}
+                value={settingsDraft.hotkeys.finalizeCombo}
+              />
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Cancel</span>
+              <input
+                className="text-xs font-mono"
+                onChange={(event) => {
+                  setSettingsDraft({
+                    ...settingsDraft,
+                    hotkeys: { ...settingsDraft.hotkeys, cancelCombo: event.target.value },
+                  });
+                  setSettingsDirty(true);
+                }}
+                value={settingsDraft.hotkeys.cancelCombo}
+              />
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Clipboard restore</span>
+              <select
+                onChange={(event) => {
+                  setSettingsDraft({
+                    ...settingsDraft,
+                    restoreClipboardAfterPaste: event.target.value === "true",
+                  });
+                  setSettingsDirty(true);
+                }}
+                value={String(settingsDraft.restoreClipboardAfterPaste)}
+              >
+                <option value="true">Restore</option>
+                <option value="false">Keep</option>
+              </select>
+            </label>
           </div>
-          <span className="badge text-xs">
-            Portable packs keep local hotkeys and overrides intact
-          </span>
-        </header>
+        </CollapsibleSection>
+      </article>
 
-        <div className="flex flex-wrap gap-2 mt-3">
-          <button className="btn btn-sm" onClick={() => void onExportPack()} type="button">
-            <Download size={13} />
-            Export pack
-          </button>
+      {/* ============================================
+          IMPORT / EXPORT
+          ============================================ */}
+      <article className="card">
+        <CollapsibleSection title="Import / Export" defaultOpen={false}>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            <button
+              className="btn btn-xs btn-ghost"
+              onClick={() => void onExportPack()}
+              type="button"
+            >
+              <Download size={11} />
+              Export
+            </button>
 
-          <label className="btn btn-sm cursor-pointer">
-            <Upload size={13} />
-            Import file
-            <input hidden onChange={(event) => void onImportFile(event)} type="file" />
-          </label>
+            <label className="btn btn-xs btn-ghost cursor-pointer">
+              <Upload size={11} />
+              Import
+              <input hidden onChange={(event) => void onImportFile(event)} type="file" />
+            </label>
 
-          <button className="btn btn-sm" onClick={() => void onApplyImportText()} type="button">
-            <FileJson size={13} />
-            Import pasted JSON
-          </button>
-        </div>
+            <button
+              className="btn btn-xs btn-ghost"
+              onClick={() => void onApplyImportText()}
+              type="button"
+            >
+              Apply JSON
+            </button>
+          </div>
 
-        <textarea
-          className="mt-2 font-mono text-sm"
-          onChange={(event) => onImportTextChange(event.target.value)}
-          value={importExportText}
-          style={{ minHeight: "6rem" }}
-        />
+          <textarea
+            className="font-mono text-xs"
+            onChange={(event) => onImportTextChange(event.target.value)}
+            value={importExportText}
+            rows={4}
+            placeholder="Paste pack JSON here..."
+          />
+        </CollapsibleSection>
       </article>
     </aside>
   );

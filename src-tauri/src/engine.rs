@@ -818,12 +818,36 @@ impl NativeEngine {
         };
 
         if !slot.enabled || slot.content.trim().is_empty() {
+            let _ = append_native_log(
+                &self.inner.app_data_dir,
+                &format!(
+                    "PASTE SKIP {}{} profile={} enabled={} content_len={}",
+                    bank_id,
+                    slot_index + 1,
+                    resolved.profile.id,
+                    slot.enabled,
+                    slot.content.len(),
+                ),
+            );
             return Ok(PasteResult {
                 ok: false,
                 message: format!("Slot {bank_id}{} is empty.", slot_index + 1),
                 copied_text: None,
             });
         }
+
+        let _ = append_native_log(
+            &self.inner.app_data_dir,
+            &format!(
+                "PASTE {}{} profile='{}' process='{}' terminal={} text_len={}",
+                bank_id,
+                slot_index + 1,
+                resolved.profile.id,
+                active_window.process_name,
+                looks_like_terminal_window(&active_window),
+                slot.content.len(),
+            ),
+        );
 
         let clipboard_text = read_clipboard_text().unwrap_or_default();
         let text = if slot.template_mode == "template" {
@@ -857,7 +881,8 @@ impl NativeEngine {
             .lock()
             .map_err(|_| "execution lock poisoned".to_string())?;
         let active_window = self.refresh_active_window()?;
-        let clipboard_text = capture_selection(&active_window)?;
+        let log_dir = self.inner.app_data_dir.clone();
+        let clipboard_text = capture_selection(&active_window, &log_dir)?;
         let resolved = self.resolve_profile(&active_window)?;
 
         let documents = self
@@ -873,9 +898,23 @@ impl NativeEngine {
                 .find(|profile| profile.kind == "global")
                 .map(|profile| profile.id.clone())
                 .unwrap_or_else(|| resolved.profile.id.clone())
+        } else if let Some(override_id) = &documents.settings_document.settings.active_profile_id_override {
+            override_id.clone()
         } else {
             resolved.profile.id.clone()
         };
+
+        let _ = append_native_log(
+            &self.inner.app_data_dir,
+            &format!(
+                "SAVE target profile={} bank={} slot={} resolved_profile={} override={}",
+                target_profile_id,
+                bank_id,
+                slot_index + 1,
+                resolved.profile.id,
+                documents.settings_document.settings.active_profile_id_override.as_deref().unwrap_or("none"),
+            ),
+        );
 
         let target_profile_name = documents
             .profiles_document
@@ -908,8 +947,21 @@ impl NativeEngine {
             .map_err(|_| "documents lock poisoned".to_string())?;
         *documents = next_documents;
 
+        let _ = append_native_log(
+            &self.inner.app_data_dir,
+            &format!(
+                "SAVE OK profile={} {}{} text_len={}",
+                target_profile_id,
+                bank_id,
+                slot_index + 1,
+                clipboard_text.len(),
+            ),
+        );
+
         Ok(format!(
-            "Captured selection and saved into {target_profile_name} {bank_id}{}.",
+            "Captured {} bytes into {} {bank_id}{}.",
+            clipboard_text.len(),
+            target_profile_name,
             slot_index + 1
         ))
     }
@@ -1725,39 +1777,81 @@ fn send_ctrl_shift_c() -> Result<(), String> {
     Ok(())
 }
 
-fn capture_selection(active_window: &ActiveWindowSnapshot) -> Result<String, String> {
+fn capture_selection(active_window: &ActiveWindowSnapshot, log_dir: &Path) -> Result<String, String> {
     wait_for_hotkey_modifiers_to_release();
     thread::sleep(Duration::from_millis(50));
 
-    let original_clipboard = read_clipboard_text().ok();
+    let is_terminal = looks_like_terminal_window(active_window);
+    let copy_chord = if is_terminal { "Ctrl+Shift+C" } else { "Ctrl+C" };
+
+    let original_clipboard = read_clipboard_text().unwrap_or_default();
     let sequence_before = unsafe { GetClipboardSequenceNumber() };
 
-    if looks_like_terminal_window(active_window) {
+    let _ = append_native_log(log_dir, &format!(
+        "CAPTURE START process='{}' title='{}' chord={} seq_before={} terminal={} original_clipboard_len={}",
+        active_window.process_name,
+        active_window.title.chars().take(80).collect::<String>(),
+        copy_chord,
+        sequence_before,
+        is_terminal,
+        original_clipboard.len(),
+    ));
+
+    if is_terminal {
         send_ctrl_shift_c()?;
     } else {
         send_ctrl_c()?;
     }
 
-    for _ in 0..40 {
+    let mut clipboard_changed = false;
+    for i in 0..40 {
         thread::sleep(Duration::from_millis(25));
         let sequence_after = unsafe { GetClipboardSequenceNumber() };
         if sequence_after != sequence_before {
+            clipboard_changed = true;
+            let _ = append_native_log(log_dir, &format!(
+                "CAPTURE clipboard changed after {}ms (seq {} -> {})",
+                (i + 1) * 25,
+                sequence_before,
+                sequence_after,
+            ));
             break;
         }
     }
 
-    let clipboard_text = read_clipboard_text()?;
-    if clipboard_text.trim().is_empty() {
-        if let Some(original) = original_clipboard {
-            let _ = write_clipboard_text(&original);
-        }
-        return Err(format!(
-            "No text selection was captured. {}{} was left unchanged.",
+    if !clipboard_changed {
+        let _ = write_clipboard_text(&original_clipboard);
+        let msg = format!(
+            "Clipboard did not change after {}. {} was left unchanged.",
+            copy_chord,
             active_window.process_name,
-            if looks_like_terminal_window(active_window) { " (tried Ctrl+Shift+C)" } else { " (tried Ctrl+C)" },
-        ));
+        );
+        let _ = append_native_log(log_dir, &format!("CAPTURE FAILED: {}", msg));
+        return Err(msg);
     }
 
+    let clipboard_text = read_clipboard_text()?;
+    if clipboard_text.trim().is_empty() {
+        let _ = write_clipboard_text(&original_clipboard);
+        let msg = "Captured clipboard text was empty. Slot was left unchanged.".to_string();
+        let _ = append_native_log(log_dir, &format!("CAPTURE FAILED: {}", msg));
+        return Err(msg);
+    }
+
+    if clipboard_text == original_clipboard {
+        let _ = write_clipboard_text(&original_clipboard);
+        let msg = format!(
+            "Clipboard content unchanged after {} — the focused app did not copy new text. Slot was left unchanged.",
+            copy_chord,
+        );
+        let _ = append_native_log(log_dir, &format!("CAPTURE FAILED: {}", msg));
+        return Err(msg);
+    }
+
+    let _ = append_native_log(log_dir, &format!(
+        "CAPTURE OK new_text_len={}",
+        clipboard_text.len(),
+    ));
     Ok(clipboard_text)
 }
 

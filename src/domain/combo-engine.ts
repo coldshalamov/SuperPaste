@@ -252,10 +252,7 @@ export function finalizeCombo(
     stanceEntries,
     loadout,
     settings,
-    {
-      ...templateContext,
-      clipboard: explicitRuntime.text || templateContext.clipboard,
-    },
+    templateContext,
     loadout.assembly ?? null,
     new Set<string>(),
     explicitRuntime,

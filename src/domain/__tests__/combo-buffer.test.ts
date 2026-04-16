@@ -114,6 +114,29 @@ describe("combo buffer basics", () => {
     expect(finalized?.text).toContain("Profile: TheRxSpot.com");
   });
 
+  it("keeps non-wrap stance clipboard templates bound to the system clipboard", () => {
+    const { seed, resolved, loadout } = resolveRxSpotLoadout();
+    const stanceSlot = loadout.bankB[0]!;
+    stanceSlot.templateMode = "template";
+    stanceSlot.assemblyMode = "append";
+    stanceSlot.content = "STANCE CLIPBOARD: {{clipboard}}";
+
+    const withStance = toggleStance(
+      queueSlot(createEmptyComboBuffer(), { bankId: "A", slotIndex: 0 }),
+      { bankId: "B", slotIndex: 0 },
+    );
+
+    const { finalized } = finalizeCombo(withStance, loadout, seed.settingsDocument.settings, {
+      clipboard: "SYSTEM CLIPBOARD VALUE",
+      profile: resolved.profile.name,
+      active_app: "code.exe",
+      date: "2026-04-13",
+    });
+
+    expect(finalized?.text).toContain("STANCE CLIPBOARD: SYSTEM CLIPBOARD VALUE");
+    expect(finalized?.text).not.toContain("STANCE CLIPBOARD: Capture the relevant repo or module map");
+  });
+
   it("removes the last queued entry without dropping latched stances", () => {
     const withQueue = queueSlot(
       queueSlot(createEmptyComboBuffer(), { bankId: "A", slotIndex: 0 }),

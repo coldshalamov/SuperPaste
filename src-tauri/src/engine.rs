@@ -342,10 +342,10 @@ fn build_slot_hotkeys(prefix: &str, digits: &[&str; 10]) -> Vec<String> {
 
 fn default_hotkeys() -> HotkeyMapping {
     HotkeyMapping {
-        bank_a_paste: build_slot_hotkeys("Ctrl+Numpad", &NUMPAD_DIGITS_STANDARD),
-        bank_b_paste: build_slot_hotkeys("Ctrl+Alt+Numpad", &NUMPAD_DIGITS_STANDARD),
-        bank_a_save_clipboard: build_slot_hotkeys("Ctrl+Shift+Numpad", &NUMPAD_DIGITS_STANDARD),
-        bank_b_save_clipboard: build_slot_hotkeys("Ctrl+Alt+Shift+Numpad", &NUMPAD_DIGITS_STANDARD),
+        bank_a_paste: build_slot_hotkeys("Ctrl+", &NUMPAD_DIGITS_STANDARD),
+        bank_b_paste: build_slot_hotkeys("Ctrl+Alt+", &NUMPAD_DIGITS_STANDARD),
+        bank_a_save_clipboard: build_slot_hotkeys("Ctrl+Shift+", &NUMPAD_DIGITS_STANDARD),
+        bank_b_save_clipboard: build_slot_hotkeys("Ctrl+Alt+Shift+", &NUMPAD_DIGITS_STANDARD),
         finalize_combo: "Ctrl+NumpadEnter".to_string(),
         cancel_combo: "Ctrl+NumpadDecimal".to_string(),
         replay_last_combo: "Ctrl+NumpadAdd".to_string(),
@@ -1536,23 +1536,70 @@ fn resolve_profile(
 }
 
 fn materialize_profile(profile: &Profile, profile_map: &HashMap<String, Profile>) -> Result<Profile, String> {
-    if let Some(parent_id) = &profile.extends_profile_id {
+    let mut visiting = HashSet::new();
+    let mut cache = HashMap::new();
+    materialize_profile_internal(profile, profile_map, &mut visiting, &mut cache)
+}
+
+fn materialize_profile_internal(
+    profile: &Profile,
+    profile_map: &HashMap<String, Profile>,
+    visiting: &mut HashSet<String>,
+    cache: &mut HashMap<String, Profile>,
+) -> Result<Profile, String> {
+    if let Some(cached) = cache.get(&profile.id) {
+        return Ok(cached.clone());
+    }
+
+    if visiting.contains(&profile.id) {
+        let mut detached = profile.clone();
+        detached.extends_profile_id = None;
+        return Ok(detached);
+    }
+
+    if profile.extends_profile_id.is_none() {
+        cache.insert(profile.id.clone(), profile.clone());
+        return Ok(profile.clone());
+    }
+
+    visiting.insert(profile.id.clone());
+    let materialized = if let Some(parent_id) = &profile.extends_profile_id {
         if let Some(parent) = profile_map.get(parent_id) {
-            let effective_parent = materialize_profile(parent, profile_map)?;
-            return Ok(Profile {
+            let effective_parent =
+                materialize_profile_internal(parent, profile_map, visiting, cache)?;
+            Profile {
                 bank_a: merge_banks(&effective_parent.bank_a, &profile.bank_a),
                 bank_b: merge_banks(&effective_parent.bank_b, &profile.bank_b),
-                supers: {
-                    let mut supers = effective_parent.supers.clone();
-                    supers.extend(profile.supers.clone());
-                    supers
-                },
+                supers: merge_supers_with_child_priority(&effective_parent.supers, &profile.supers),
                 ..profile.clone()
-            });
+            }
+        } else {
+            profile.clone()
+        }
+    } else {
+        profile.clone()
+    };
+
+    visiting.remove(&profile.id);
+    cache.insert(profile.id.clone(), materialized.clone());
+    Ok(materialized)
+}
+
+fn merge_supers_with_child_priority(
+    parent_supers: &[SuperRecipe],
+    child_supers: &[SuperRecipe],
+) -> Vec<SuperRecipe> {
+    let mut supers = parent_supers.to_vec();
+
+    for child_super in child_supers {
+        if let Some(existing) = supers.iter_mut().find(|super_recipe| super_recipe.id == child_super.id) {
+            *existing = child_super.clone();
+        } else {
+            supers.push(child_super.clone());
         }
     }
 
-    Ok(profile.clone())
+    supers
 }
 
 fn merge_banks(parent: &SlotBank, child: &SlotBank) -> SlotBank {
@@ -1819,33 +1866,28 @@ fn capture_selection(active_window: &ActiveWindowSnapshot, log_dir: &Path) -> Re
         }
     }
 
-    if !clipboard_changed {
-        let _ = write_clipboard_text(&original_clipboard);
-        let msg = format!(
-            "Clipboard did not change after {}. {} was left unchanged.",
-            copy_chord,
-            active_window.process_name,
-        );
-        let _ = append_native_log(log_dir, &format!("CAPTURE FAILED: {}", msg));
-        return Err(msg);
-    }
+    let clipboard_text = if clipboard_changed {
+        read_clipboard_text()?
+    } else {
+        String::new()
+    };
 
-    let clipboard_text = read_clipboard_text()?;
-    if clipboard_text.trim().is_empty() {
+    if let Err(message) = validate_captured_selection(
+        clipboard_changed,
+        &clipboard_text,
+        copy_chord,
+        &active_window.process_name,
+    ) {
         let _ = write_clipboard_text(&original_clipboard);
-        let msg = "Captured clipboard text was empty. Slot was left unchanged.".to_string();
-        let _ = append_native_log(log_dir, &format!("CAPTURE FAILED: {}", msg));
-        return Err(msg);
+        let _ = append_native_log(log_dir, &format!("CAPTURE FAILED: {}", message));
+        return Err(message);
     }
 
     if clipboard_text == original_clipboard {
-        let _ = write_clipboard_text(&original_clipboard);
-        let msg = format!(
-            "Clipboard content unchanged after {} — the focused app did not copy new text. Slot was left unchanged.",
-            copy_chord,
+        let _ = append_native_log(
+            log_dir,
+            "CAPTURE NOTE copied text matches the previous clipboard value but sequence advanced.",
         );
-        let _ = append_native_log(log_dir, &format!("CAPTURE FAILED: {}", msg));
-        return Err(msg);
     }
 
     let _ = append_native_log(log_dir, &format!(
@@ -1853,6 +1895,27 @@ fn capture_selection(active_window: &ActiveWindowSnapshot, log_dir: &Path) -> Re
         clipboard_text.len(),
     ));
     Ok(clipboard_text)
+}
+
+fn validate_captured_selection(
+    clipboard_changed: bool,
+    clipboard_text: &str,
+    copy_chord: &str,
+    process_name: &str,
+) -> Result<(), String> {
+    if !clipboard_changed {
+        return Err(format!(
+            "Clipboard did not change after {}. {} was left unchanged.",
+            copy_chord,
+            process_name,
+        ));
+    }
+
+    if clipboard_text.trim().is_empty() {
+        return Err("Captured clipboard text was empty. Slot was left unchanged.".to_string());
+    }
+
+    Ok(())
 }
 
 fn keyboard_input(virtual_key: u16, key_up: bool) -> INPUT {
@@ -2094,6 +2157,175 @@ mod tests {
         assert_eq!(migrated.bank_b_paste, defaults.bank_b_paste);
         assert_eq!(migrated.bank_a_save_clipboard, defaults.bank_a_save_clipboard);
         assert_eq!(migrated.bank_b_save_clipboard, defaults.bank_b_save_clipboard);
+    }
+
+    #[test]
+    fn default_hotkeys_use_valid_numpad_bindings() {
+        let defaults = default_hotkeys();
+        assert_eq!(defaults.bank_a_paste[0], "Ctrl+Numpad1");
+        assert_eq!(defaults.bank_a_paste[9], "Ctrl+Numpad0");
+        assert_eq!(defaults.bank_b_paste[0], "Ctrl+Alt+Numpad1");
+        assert_eq!(defaults.bank_a_save_clipboard[0], "Ctrl+Shift+Numpad1");
+        assert_eq!(defaults.bank_b_save_clipboard[0], "Ctrl+Alt+Shift+Numpad1");
+    }
+
+    #[test]
+    fn migrate_hotkeys_repairs_malformed_double_numpad_bindings() {
+        let malformed = HotkeyMapping {
+            bank_a_paste: build_slot_hotkeys("Ctrl+Numpad", &NUMPAD_DIGITS_STANDARD),
+            bank_b_paste: build_slot_hotkeys("Ctrl+Alt+Numpad", &NUMPAD_DIGITS_STANDARD),
+            bank_a_save_clipboard: build_slot_hotkeys("Ctrl+Shift+Numpad", &NUMPAD_DIGITS_STANDARD),
+            bank_b_save_clipboard: build_slot_hotkeys("Ctrl+Alt+Shift+Numpad", &NUMPAD_DIGITS_STANDARD),
+            finalize_combo: "Ctrl+NumpadEnter".to_string(),
+            cancel_combo: "Ctrl+NumpadDecimal".to_string(),
+            replay_last_combo: "Ctrl+NumpadAdd".to_string(),
+            toggle_window: "Ctrl+NumpadSubtract".to_string(),
+            panic_toggle: "Ctrl+Pause".to_string(),
+            extra: HashMap::new(),
+        };
+
+        let (migrated, changed) = migrate_hotkeys_if_needed(&malformed);
+        let defaults = default_hotkeys();
+
+        assert!(changed);
+        assert_eq!(migrated.bank_a_paste, defaults.bank_a_paste);
+        assert_eq!(migrated.bank_b_paste, defaults.bank_b_paste);
+        assert_eq!(migrated.bank_a_save_clipboard, defaults.bank_a_save_clipboard);
+        assert_eq!(migrated.bank_b_save_clipboard, defaults.bank_b_save_clipboard);
+    }
+
+    #[test]
+    fn validate_captured_selection_allows_same_text_when_clipboard_sequence_changed() {
+        let result = validate_captured_selection(true, "same text", "Ctrl+C", "code.exe");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_captured_selection_requires_clipboard_change() {
+        let result = validate_captured_selection(false, "captured", "Ctrl+C", "code.exe");
+        assert_eq!(
+            result.unwrap_err(),
+            "Clipboard did not change after Ctrl+C. code.exe was left unchanged."
+        );
+    }
+
+    #[test]
+    fn validate_captured_selection_rejects_empty_text() {
+        let result = validate_captured_selection(true, "   ", "Ctrl+C", "code.exe");
+        assert_eq!(
+            result.unwrap_err(),
+            "Captured clipboard text was empty. Slot was left unchanged."
+        );
+    }
+
+    #[test]
+    fn materialize_profile_breaks_circular_inheritance_without_recursing_forever() {
+        let mut documents = default_documents();
+        let global_profile = documents.profiles_document.profiles[0].clone();
+
+        let mut cycle_a = global_profile.clone();
+        cycle_a.id = "cycle-a".to_string();
+        cycle_a.name = "Cycle A".to_string();
+        cycle_a.kind = "workspace".to_string();
+        cycle_a.extends_profile_id = Some("cycle-b".to_string());
+        cycle_a.match_rules = vec![];
+
+        let mut cycle_b = global_profile.clone();
+        cycle_b.id = "cycle-b".to_string();
+        cycle_b.name = "Cycle B".to_string();
+        cycle_b.kind = "workspace".to_string();
+        cycle_b.extends_profile_id = Some("cycle-a".to_string());
+        cycle_b.match_rules = vec![];
+
+        documents.profiles_document.profiles = vec![global_profile, cycle_a, cycle_b];
+        let settings = AppSettings {
+            active_profile_id_override: Some("cycle-a".to_string()),
+            ..documents.settings_document.settings.clone()
+        };
+
+        let resolved = resolve_profile(
+            &documents.profiles_document.profiles,
+            &settings,
+            &ActiveWindowSnapshot::default(),
+        )
+        .expect("circular inheritance should not crash resolution");
+
+        assert_eq!(resolved.profile.id, "cycle-a");
+        assert_eq!(resolved.effective_bank_a.slots.len(), 10);
+        assert_eq!(resolved.effective_bank_b.slots.len(), 10);
+    }
+
+    #[test]
+    fn materialize_profile_prefers_child_super_when_ids_match() {
+        let mut documents = default_documents();
+
+        let global = documents
+            .profiles_document
+            .profiles
+            .iter_mut()
+            .find(|profile| profile.id == "global-workflow")
+            .expect("global profile");
+        global.supers = vec![SuperRecipe {
+            id: "shared-super".to_string(),
+            name: "Parent shared super".to_string(),
+            description: "".to_string(),
+            steps: vec![RecipeStep::Slot {
+                slot_ref: SlotReference {
+                    bank_id: "A".to_string(),
+                    slot_index: 0,
+                },
+            }],
+            sequence: vec![],
+            apply_stances: true,
+            hotkey_hint: None,
+            assembly: None,
+            extra: HashMap::new(),
+        }];
+
+        let workspace = documents
+            .profiles_document
+            .profiles
+            .iter_mut()
+            .find(|profile| profile.id == "therxspot")
+            .expect("workspace profile");
+        workspace.supers = vec![SuperRecipe {
+            id: "shared-super".to_string(),
+            name: "Workspace shared super".to_string(),
+            description: "".to_string(),
+            steps: vec![RecipeStep::Slot {
+                slot_ref: SlotReference {
+                    bank_id: "A".to_string(),
+                    slot_index: 1,
+                },
+            }],
+            sequence: vec![],
+            apply_stances: true,
+            hotkey_hint: None,
+            assembly: None,
+            extra: HashMap::new(),
+        }];
+
+        let resolved = resolve_profile(
+            &documents.profiles_document.profiles,
+            &documents.settings_document.settings,
+            &ActiveWindowSnapshot {
+                title: "VS Code - TheRxSpot.com".to_string(),
+                process_name: "code.exe".to_string(),
+                process_path: "C:/Program Files/Microsoft VS Code/Code.exe".to_string(),
+                workspace_path: "C:/Users/93rob/Documents/GitHub/TheRxSpot.com".to_string(),
+            },
+        )
+        .expect("profile resolution");
+
+        let shared_supers: Vec<&SuperRecipe> = resolved
+            .profile
+            .supers
+            .iter()
+            .filter(|recipe| recipe.id == "shared-super")
+            .collect();
+
+        assert_eq!(shared_supers.len(), 1);
+        assert_eq!(shared_supers[0].name, "Workspace shared super");
     }
 
     #[test]

@@ -30,26 +30,58 @@ function normalize(value: string, caseSensitive: boolean) {
   return caseSensitive ? value : value.toLowerCase();
 }
 
-function materializeProfile(profile: Profile, profileMap: Map<string, Profile>): Profile {
+function mergeSupersWithChildPriority(parentSupers: SuperRecipe[], childSupers: SuperRecipe[]) {
+  const byId = new Map<string, SuperRecipe>();
+
+  parentSupers.forEach((recipe) => byId.set(recipe.id, recipe));
+  childSupers.forEach((recipe) => byId.set(recipe.id, recipe));
+
+  return Array.from(byId.values());
+}
+
+function materializeProfile(
+  profile: Profile,
+  profileMap: Map<string, Profile>,
+  visiting = new Set<string>(),
+  cache = new Map<string, Profile>(),
+): Profile {
+  const cached = cache.get(profile.id);
+  if (cached) {
+    return cached;
+  }
+
+  if (visiting.has(profile.id)) {
+    return {
+      ...profile,
+      extendsProfileId: null,
+    };
+  }
+
   if (!profile.extendsProfileId) {
+    cache.set(profile.id, profile);
     return profile;
   }
 
+  visiting.add(profile.id);
   const parent = profileMap.get(profile.extendsProfileId);
+  let materialized: Profile;
 
   if (!parent) {
-    return profile;
+    materialized = profile;
+  } else {
+    const effectiveParent = materializeProfile(parent, profileMap, visiting, cache);
+    materialized = {
+      ...profile,
+      assembly: profile.assembly ?? effectiveParent.assembly ?? null,
+      bankA: mergeBanks(effectiveParent.bankA, profile.bankA),
+      bankB: mergeBanks(effectiveParent.bankB, profile.bankB),
+      supers: mergeSupersWithChildPriority(effectiveParent.supers, profile.supers),
+    };
   }
 
-  const effectiveParent = materializeProfile(parent, profileMap);
-
-  return {
-    ...profile,
-    assembly: profile.assembly ?? effectiveParent.assembly ?? null,
-    bankA: mergeBanks(effectiveParent.bankA, profile.bankA),
-    bankB: mergeBanks(effectiveParent.bankB, profile.bankB),
-    supers: [...effectiveParent.supers, ...profile.supers],
-  };
+  visiting.delete(profile.id);
+  cache.set(profile.id, materialized);
+  return materialized;
 }
 
 function scoreProfile(profile: Profile, activeWindow: ActiveWindowSnapshot) {

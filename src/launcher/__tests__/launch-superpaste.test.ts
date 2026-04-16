@@ -1,5 +1,6 @@
 import path from "node:path";
 import process from "node:process";
+import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import {
@@ -113,20 +114,40 @@ describe("prependPathEntry", () => {
 describe("launch-superpaste.cmd", () => {
   it.runIf(process.platform === "win32")("prefers the existing release build in default dry-run mode", () => {
     const repoRoot = path.resolve(process.cwd());
-    const output = execFileSync("cmd.exe", ["/c", "launch-superpaste.cmd"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        PATH: "C:\\Program Files\\nodejs;C:\\Windows\\System32;C:\\Windows",
-        SUPERPASTE_LAUNCHER_DRY_RUN: "1",
-        SUPERPASTE_LAUNCHER_NO_PAUSE: "1",
-      },
-    });
+    const releaseExe = path.join(repoRoot, "src-tauri", "target", "release", "superpaste.exe");
+    const releaseDir = path.dirname(releaseExe);
+    const releaseDirExists = fs.existsSync(releaseDir);
+    const releaseExeExists = fs.existsSync(releaseExe);
 
-    const plan = JSON.parse(output);
+    if (!releaseDirExists) {
+      fs.mkdirSync(releaseDir, { recursive: true });
+    }
+    if (!releaseExeExists) {
+      fs.writeFileSync(releaseExe, "superpaste test stub");
+    }
 
-    expect(plan.action).toBe("launch-release");
+    try {
+      const output = execFileSync("cmd.exe", ["/c", "launch-superpaste.cmd"], {
+        cwd: repoRoot,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: "C:\\Program Files\\nodejs;C:\\Windows\\System32;C:\\Windows",
+          SUPERPASTE_LAUNCHER_DRY_RUN: "1",
+          SUPERPASTE_LAUNCHER_NO_PAUSE: "1",
+        },
+      });
+
+      const plan = JSON.parse(output);
+      expect(plan.action).toBe("launch-release");
+    } finally {
+      if (!releaseExeExists) {
+        fs.rmSync(releaseExe, { force: true });
+      }
+      if (!releaseDirExists) {
+        fs.rmSync(releaseDir, { recursive: true, force: true });
+      }
+    }
   });
 
   it.runIf(process.platform === "win32")("honors --dev instead of short-circuiting to an existing release exe", () => {

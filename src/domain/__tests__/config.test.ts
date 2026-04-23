@@ -12,6 +12,7 @@ describe("config parsing and validation", () => {
   it("parses seeded settings and profiles", () => {
     const seed = createSeedDocuments("2026-04-13T00:00:00.000Z");
     expect(parseSettingsDocument(JSON.stringify(seed.settingsDocument)).settings.theme).toBe("dark");
+    expect(parseSettingsDocument(JSON.stringify(seed.settingsDocument)).settings.experimental.autoQueueCaptures).toBe(true);
     expect(parseProfilesDocument(JSON.stringify(seed.profilesDocument)).profiles).toHaveLength(2);
   });
 

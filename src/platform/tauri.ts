@@ -28,8 +28,18 @@ export type NativeStatusPayload = {
 };
 
 export type AppCommandPayload = {
-  action: "show-dock" | "show-editor" | "toggle-hotkeys" | "switch-profile";
+  action:
+    | "show-dock"
+    | "show-editor"
+    | "toggle-hotkeys"
+    | "switch-profile"
+    | "paste-combo"
+    | "clear-combo"
+    | "replay-combo"
+    | "queue-slot";
   profileId?: string | null;
+  bankId?: "A" | "B" | null;
+  slotIndex?: number | null;
 };
 
 export type NativePastePlan = {

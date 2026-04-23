@@ -255,4 +255,49 @@ describe("SuperPasteEngine", () => {
     expect(afterFinalize.comboState.queuedEntries).toHaveLength(0);
     expect(afterFinalize.finalizedPreview).toContain("State the failing behavior");
   });
+
+  it("replays the last finalized combo through the paste engine", async () => {
+    const seed = createSeedDocuments("2026-04-13T00:00:00.000Z");
+    const execute = vi.fn().mockResolvedValue({
+      ok: true,
+      message: "Replayed combo.",
+    });
+    const engine = new SuperPasteEngine(
+      {
+        activeWindowProvider: {
+          getSnapshot: vi.fn().mockResolvedValue(
+            makeWindow({
+              title: "TheRxSpot.com - Visual Studio Code",
+              processName: "Code.exe",
+            }),
+          ),
+        },
+        clipboardGateway: {
+          readText: vi.fn().mockResolvedValue(""),
+          writeText: vi.fn().mockResolvedValue(undefined),
+        },
+        pasteEngine: {
+          execute,
+        },
+        persistDocuments: vi.fn().mockResolvedValue(undefined),
+      },
+      {
+        settings: seed.settingsDocument.settings,
+        profiles: seed.profilesDocument.profiles,
+      },
+    );
+
+    await engine.queueSlot({ bankId: "A", slotIndex: 2 });
+    await engine.finalize("copy-only");
+    execute.mockClear();
+    const replayed = await engine.replayLast();
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionMode: "paste-now",
+        text: expect.stringContaining("State the failing behavior"),
+      }),
+    );
+    expect(replayed.lastActionMessage).toBe("Replayed combo.");
+  });
 });

@@ -203,12 +203,28 @@ export class SuperPasteEngine {
 
   async replayLast() {
     return this.serialize(async () => {
+      await this.refreshActiveWindowInternal();
       const last = replayLast(this.state.comboState);
+      if (!last) {
+        this.state = {
+          ...this.state,
+          finalizedPreview: "",
+          lastActionMessage: "No combo replay available yet.",
+        };
+
+        return this.buildSnapshot();
+      }
+
+      const result = await this.dependencies.pasteEngine.execute({
+        text: last.text,
+        executionMode: "paste-now",
+        restoreClipboard: this.state.settings.restoreClipboardAfterPaste,
+      });
 
       this.state = {
         ...this.state,
-        finalizedPreview: last?.text ?? "",
-        lastActionMessage: last ? "Loaded the last finalized combo preview." : "No combo replay available yet.",
+        finalizedPreview: last.text,
+        lastActionMessage: result.message,
       };
 
       return this.buildSnapshot();

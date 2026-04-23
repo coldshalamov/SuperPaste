@@ -625,6 +625,61 @@
   /* ============================================
      COMBO HUD
      ============================================ */
+  .controller-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .controller-strip {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(84px, 0.65fr) minmax(104px, 0.8fr);
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .controller-cell {
+    min-width: 0;
+    padding: 0 0.625rem;
+    border-left: 1px solid var(--color-border-subtle);
+  }
+
+  .controller-cell:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .controller-value {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .controller-value.is-live {
+    color: var(--color-success);
+  }
+
+  .controller-value.is-muted {
+    color: var(--color-warning);
+  }
+
+  .controller-subvalue {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--color-text-muted);
+    font-size: 0.6875rem;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .combo-queue {
     display: flex;
     flex-wrap: wrap;
@@ -911,6 +966,15 @@
 }
 
 @media (max-width: 800px) {
+  .controller-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .controller-cell {
+    border-left: 0;
+    padding: 0;
+  }
+
   .bank-grid {
     grid-template-columns: repeat(3, 1fr);
   }

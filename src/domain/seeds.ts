@@ -73,6 +73,7 @@ export const defaultSettings: AppSettings = {
   },
   experimental: {
     chordMode: false,
+    autoQueueCaptures: true,
   },
   activeProfileIdOverride: null,
 };

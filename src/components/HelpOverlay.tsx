@@ -28,7 +28,7 @@ function HotkeyRow({
   return (
     <div className="flex items-center gap-3 py-1.5">
       <div className="flex gap-1 shrink-0">
-        {keys.split(" + ").map((part, i) => (
+        {keys.split(/\s*\+\s*/).map((part, i) => (
           <KeyBadge key={i} text={part.trim()} variant={variant} />
         ))}
       </div>
@@ -37,7 +37,18 @@ function HotkeyRow({
   );
 }
 
-function HotkeysTab() {
+function compactSlotRange(bindings: string[]) {
+  const first = bindings[0] ?? "";
+  if (first.endsWith("Numpad1")) return first.replace(/Numpad1$/, "Numpad1..0");
+  if (first.endsWith("1")) return first.replace(/1$/, "1..0");
+  return first || "Unbound";
+}
+
+function HotkeysTab({ settings }: { settings: AppSettings }) {
+  const captureAction = settings.experimental.autoQueueCaptures
+    ? "Capture slot and queue it"
+    : "Capture slot";
+
   return (
     <div className="flex flex-col gap-4">
       {/* Bank A */}
@@ -49,8 +60,8 @@ function HotkeysTab() {
           </span>
         </div>
         <div className="pl-4 border-l border-[var(--color-accent-a-border)]">
-          <HotkeyRow keys="Ctrl + 1..0" action="Paste slot" variant="a" />
-          <HotkeyRow keys="Ctrl + Shift + 1..0" action="Save clipboard to slot" variant="a" />
+          <HotkeyRow keys={compactSlotRange(settings.hotkeys.bankAPaste)} action="Paste slot" variant="a" />
+          <HotkeyRow keys={compactSlotRange(settings.hotkeys.bankASaveClipboard)} action={captureAction} variant="a" />
         </div>
       </div>
 
@@ -63,10 +74,10 @@ function HotkeysTab() {
           </span>
         </div>
         <div className="pl-4 border-l border-[var(--color-accent-b-border)]">
-          <HotkeyRow keys="Ctrl + Alt + 1..0" action="Paste slot" variant="b" />
+          <HotkeyRow keys={compactSlotRange(settings.hotkeys.bankBPaste)} action="Paste slot" variant="b" />
           <HotkeyRow
-            keys="Ctrl + Alt + Shift + 1..0"
-            action="Save clipboard to slot"
+            keys={compactSlotRange(settings.hotkeys.bankBSaveClipboard)}
+            action={captureAction}
             variant="b"
           />
         </div>
@@ -79,11 +90,11 @@ function HotkeysTab() {
           <span className="text-xs font-semibold">General</span>
         </div>
         <div className="pl-4 border-l border-[var(--color-border)]">
-          <HotkeyRow keys="Alt + Enter" action="Paste combo" />
-          <HotkeyRow keys="Alt + Backspace" action="Clear queue" />
-          <HotkeyRow keys="Alt + /" action="Replay last combo" />
-          <HotkeyRow keys="Alt + `" action="Toggle window" />
-          <HotkeyRow keys="Alt + Pause" action="Pause hotkeys" />
+          <HotkeyRow keys={settings.hotkeys.finalizeCombo} action="Paste combo" />
+          <HotkeyRow keys={settings.hotkeys.cancelCombo} action="Clear queue" />
+          <HotkeyRow keys={settings.hotkeys.replayLastCombo} action="Replay last combo" />
+          <HotkeyRow keys={settings.hotkeys.toggleWindow} action="Toggle window" />
+          <HotkeyRow keys={settings.hotkeys.panicToggle} action="Pause hotkeys" />
           <HotkeyRow keys="F1" action="This help" />
         </div>
       </div>
@@ -136,7 +147,7 @@ function TipsTab() {
   );
 }
 
-export function HelpOverlay({ open, onClose }: HelpOverlayProps) {
+export function HelpOverlay({ open, onClose, settings }: HelpOverlayProps) {
   const [activeTab, setActiveTab] = useState<TabId>("hotkeys");
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
@@ -160,7 +171,7 @@ export function HelpOverlay({ open, onClose }: HelpOverlayProps) {
         ))}
       </div>
 
-      {activeTab === "hotkeys" && <HotkeysTab />}
+      {activeTab === "hotkeys" && <HotkeysTab settings={settings} />}
       {activeTab === "tips" && <TipsTab />}
     </Modal>
   );

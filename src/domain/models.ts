@@ -175,6 +175,7 @@ export const appSettingsSchema = z.object({
   }),
   experimental: z.object({
     chordMode: z.boolean().default(false),
+    autoQueueCaptures: z.boolean().default(true),
   }),
   activeProfileIdOverride: z.string().nullable().default(null),
 });

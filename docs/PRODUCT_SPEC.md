@@ -28,6 +28,8 @@ Direct slot moves:
 - `Ctrl+Shift+1..0` copy the focused selection into Bank A
 - `Ctrl+Alt+Shift+1..0` copy the focused selection into Bank B
 - Matching numpad digits mirror the same Bank A and Bank B slots for paste and save.
+- Copy/save hotkeys auto-queue the captured slot by default, making repeated capture gestures build a combo stack.
+- Combo paste, clear, replay, dock toggle, and panic controls are native hotkeys and tray commands.
 
 Combo controls:
 - queue slots from either bank
@@ -211,4 +213,4 @@ Safety controls:
 
 - Clipboard restore is text-first rather than rich clipboard aware.
 - Direct paste and save behavior is implemented, but still benefits from manual Windows smoke in real target apps before broader rollout.
-- Native combo-management hotkeys are intentionally conservative compared with the direct slot hotkeys.
+- Native combo-management hotkeys are wired for paste, clear, and replay; remove-last remains a dock control.

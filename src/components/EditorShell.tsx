@@ -826,6 +826,51 @@ export function EditorShell({
             </label>
 
             <label className="field-block">
+              <span className="field-caption">Replay</span>
+              <input
+                className="text-xs font-mono"
+                onChange={(event) => {
+                  setSettingsDraft({
+                    ...settingsDraft,
+                    hotkeys: { ...settingsDraft.hotkeys, replayLastCombo: event.target.value },
+                  });
+                  setSettingsDirty(true);
+                }}
+                value={settingsDraft.hotkeys.replayLastCombo}
+              />
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Dock</span>
+              <input
+                className="text-xs font-mono"
+                onChange={(event) => {
+                  setSettingsDraft({
+                    ...settingsDraft,
+                    hotkeys: { ...settingsDraft.hotkeys, toggleWindow: event.target.value },
+                  });
+                  setSettingsDirty(true);
+                }}
+                value={settingsDraft.hotkeys.toggleWindow}
+              />
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Panic</span>
+              <input
+                className="text-xs font-mono"
+                onChange={(event) => {
+                  setSettingsDraft({
+                    ...settingsDraft,
+                    hotkeys: { ...settingsDraft.hotkeys, panicToggle: event.target.value },
+                  });
+                  setSettingsDirty(true);
+                }}
+                value={settingsDraft.hotkeys.panicToggle}
+              />
+            </label>
+
+            <label className="field-block">
               <span className="field-caption">Clipboard restore</span>
               <select
                 onChange={(event) => {
@@ -839,6 +884,26 @@ export function EditorShell({
               >
                 <option value="true">Restore</option>
                 <option value="false">Keep</option>
+              </select>
+            </label>
+
+            <label className="field-block">
+              <span className="field-caption">Captured clips</span>
+              <select
+                onChange={(event) => {
+                  setSettingsDraft({
+                    ...settingsDraft,
+                    experimental: {
+                      ...settingsDraft.experimental,
+                      autoQueueCaptures: event.target.value === "true",
+                    },
+                  });
+                  setSettingsDirty(true);
+                }}
+                value={String(settingsDraft.experimental.autoQueueCaptures)}
+              >
+                <option value="true">Queue</option>
+                <option value="false">Save only</option>
               </select>
             </label>
           </div>

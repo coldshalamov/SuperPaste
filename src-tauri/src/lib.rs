@@ -1,6 +1,9 @@
 mod engine;
 
-use engine::{ActiveWindowSnapshot, NativeEngine, NativeRuntimeSnapshot, PastePlan, PasteResult, PersistenceSnapshot};
+use engine::{
+    ActiveWindowSnapshot, NativeEngine, NativeRuntimeSnapshot, PastePlan, PasteResult,
+    PersistenceSnapshot,
+};
 use tauri::{
     menu::{IsMenuItem, Menu, MenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -11,7 +14,9 @@ use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
 const TRAY_ID: &str = "superpaste-tray";
 
 #[tauri::command]
-fn load_persistence_snapshot(engine: State<'_, NativeEngine>) -> Result<PersistenceSnapshot, String> {
+fn load_persistence_snapshot(
+    engine: State<'_, NativeEngine>,
+) -> Result<PersistenceSnapshot, String> {
     engine.persistence_snapshot()
 }
 
@@ -36,12 +41,16 @@ fn refresh_native_runtime(
 }
 
 #[tauri::command]
-fn get_native_runtime_snapshot(engine: State<'_, NativeEngine>) -> Result<NativeRuntimeSnapshot, String> {
+fn get_native_runtime_snapshot(
+    engine: State<'_, NativeEngine>,
+) -> Result<NativeRuntimeSnapshot, String> {
     engine.runtime_snapshot()
 }
 
 #[tauri::command]
-fn get_active_window_snapshot(engine: State<'_, NativeEngine>) -> Result<ActiveWindowSnapshot, String> {
+fn get_active_window_snapshot(
+    engine: State<'_, NativeEngine>,
+) -> Result<ActiveWindowSnapshot, String> {
     engine.refresh_active_window()
 }
 
@@ -51,7 +60,10 @@ fn read_system_clipboard_text(engine: State<'_, NativeEngine>) -> Result<String,
 }
 
 #[tauri::command]
-fn write_system_clipboard_text(engine: State<'_, NativeEngine>, text: String) -> Result<(), String> {
+fn write_system_clipboard_text(
+    engine: State<'_, NativeEngine>,
+    text: String,
+) -> Result<(), String> {
     engine.write_clipboard_text(&text)
 }
 
@@ -111,23 +123,42 @@ pub fn show_main_window(app: &AppHandle) {
 struct AppCommandPayload {
     action: String,
     profile_id: Option<String>,
+    bank_id: Option<String>,
+    slot_index: Option<usize>,
 }
 
 fn emit_app_command(app: &AppHandle, action: &str, profile_id: Option<String>) {
+    emit_app_command_with_slot(app, action, profile_id, None, None);
+}
+
+fn emit_app_command_with_slot(
+    app: &AppHandle,
+    action: &str,
+    profile_id: Option<String>,
+    bank_id: Option<char>,
+    slot_index: Option<usize>,
+) {
     let _ = app.emit(
         "app-command",
         AppCommandPayload {
             action: action.to_string(),
             profile_id,
+            bank_id: bank_id.map(|value| value.to_string()),
+            slot_index,
         },
     );
 }
 
-fn build_tray_menu<R: tauri::Runtime>(app: &AppHandle<R>, engine: &NativeEngine) -> Result<Menu<R>, String> {
+fn build_tray_menu<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    engine: &NativeEngine,
+) -> Result<Menu<R>, String> {
     let tray_state = engine.tray_menu_state()?;
-    let open_dock = MenuItem::with_id(app, "open_dock", "Open dock", true, None::<&str>).map_err(|error| error.to_string())?;
+    let open_dock = MenuItem::with_id(app, "open_dock", "Open dock", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
     let open_editor =
-        MenuItem::with_id(app, "open_editor", "Quick open editor", true, None::<&str>).map_err(|error| error.to_string())?;
+        MenuItem::with_id(app, "open_editor", "Quick open editor", true, None::<&str>)
+            .map_err(|error| error.to_string())?;
     let toggle_hotkeys = MenuItem::with_id(
         app,
         "toggle_hotkeys",
@@ -140,7 +171,15 @@ fn build_tray_menu<R: tauri::Runtime>(app: &AppHandle<R>, engine: &NativeEngine)
         None::<&str>,
     )
     .map_err(|error| error.to_string())?;
-    let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>).map_err(|error| error.to_string())?;
+    let paste_combo = MenuItem::with_id(app, "paste_combo", "Paste combo", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let replay_combo =
+        MenuItem::with_id(app, "replay_combo", "Replay last combo", true, None::<&str>)
+            .map_err(|error| error.to_string())?;
+    let clear_combo = MenuItem::with_id(app, "clear_combo", "Clear combo", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
 
     let auto_item = MenuItem::with_id(
         app,
@@ -161,13 +200,21 @@ fn build_tray_menu<R: tauri::Runtime>(app: &AppHandle<R>, engine: &NativeEngine)
             .profiles
             .iter()
             .map(|(profile_id, profile_name)| {
-                let label = if tray_state.active_override_id.as_deref() == Some(profile_id.as_str()) {
+                let label = if tray_state.active_override_id.as_deref() == Some(profile_id.as_str())
+                {
                     format!("{profile_name} (active)")
                 } else {
                     profile_name.clone()
                 };
 
-                MenuItem::with_id(app, format!("profile:{profile_id}"), label, true, None::<&str>).map_err(|error| error.to_string())
+                MenuItem::with_id(
+                    app,
+                    format!("profile:{profile_id}"),
+                    label,
+                    true,
+                    None::<&str>,
+                )
+                .map_err(|error| error.to_string())
             })
             .collect::<Result<Vec<_>, _>>()?,
     );
@@ -176,7 +223,8 @@ fn build_tray_menu<R: tauri::Runtime>(app: &AppHandle<R>, engine: &NativeEngine)
         .iter()
         .map(|item| item as &dyn IsMenuItem<R>)
         .collect();
-    let profile_submenu = Submenu::with_items(app, "Switch profile", true, &profile_refs).map_err(|error| error.to_string())?;
+    let profile_submenu = Submenu::with_items(app, "Switch profile", true, &profile_refs)
+        .map_err(|error| error.to_string())?;
 
     Menu::with_items(
         app,
@@ -184,6 +232,9 @@ fn build_tray_menu<R: tauri::Runtime>(app: &AppHandle<R>, engine: &NativeEngine)
             &open_dock,
             &open_editor,
             &toggle_hotkeys,
+            &paste_combo,
+            &replay_combo,
+            &clear_combo,
             &profile_submenu,
             &quit_item,
         ],
@@ -191,10 +242,14 @@ fn build_tray_menu<R: tauri::Runtime>(app: &AppHandle<R>, engine: &NativeEngine)
     .map_err(|error| error.to_string())
 }
 
-fn refresh_tray_menu<R: tauri::Runtime>(app: &AppHandle<R>, engine: &NativeEngine) -> Result<(), String> {
+fn refresh_tray_menu<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    engine: &NativeEngine,
+) -> Result<(), String> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         let menu = build_tray_menu(app, engine)?;
-        tray.set_menu(Some(menu)).map_err(|error| error.to_string())?;
+        tray.set_menu(Some(menu))
+            .map_err(|error| error.to_string())?;
     }
 
     Ok(())
@@ -222,11 +277,16 @@ fn setup_tray(app: &mut tauri::App, engine: &NativeEngine) -> tauri::Result<()> 
                 emit_app_command(app, "show-editor", None);
             }
             "toggle_hotkeys" => emit_app_command(app, "toggle-hotkeys", None),
+            "paste_combo" => emit_app_command(app, "paste-combo", None),
+            "replay_combo" => emit_app_command(app, "replay-combo", None),
+            "clear_combo" => emit_app_command(app, "clear-combo", None),
             "quit" => app.exit(0),
             id if id == "profile:auto" => emit_app_command(app, "switch-profile", None),
-            id if id.starts_with("profile:") => {
-                emit_app_command(app, "switch-profile", Some(id.trim_start_matches("profile:").to_string()))
-            }
+            id if id.starts_with("profile:") => emit_app_command(
+                app,
+                "switch-profile",
+                Some(id.trim_start_matches("profile:").to_string()),
+            ),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -249,14 +309,18 @@ fn setup_tray(app: &mut tauri::App, engine: &NativeEngine) -> tauri::Result<()> 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(|app, shortcut: &Shortcut, event| {
-            if event.state() == ShortcutState::Released {
-                if let Some(engine) = app.try_state::<NativeEngine>() {
-                    engine.handle_shortcut_event(app.clone(), shortcut);
-                    let _ = refresh_tray_menu(&app, &engine);
-                }
-            }
-        }).build())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut: &Shortcut, event| {
+                    if event.state() == ShortcutState::Released {
+                        if let Some(engine) = app.try_state::<NativeEngine>() {
+                            engine.handle_shortcut_event(app.clone(), shortcut);
+                            let _ = refresh_tray_menu(&app, &engine);
+                        }
+                    }
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let engine = NativeEngine::initialize(app.handle())?;

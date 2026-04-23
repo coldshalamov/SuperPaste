@@ -106,8 +106,8 @@
 2. Focus the harness textarea and copy a known multiline payload into the system clipboard.
 3. Press `Ctrl+1` through `Ctrl+0` and confirm Bank A slot output lands in the textarea without leaving the slot text on your clipboard afterward. Repeat with the matching numpad digits.
 4. Press `Ctrl+Alt+1` through `Ctrl+Alt+0` and confirm Bank B output lands in the textarea with the same clipboard-restore behavior. Repeat with the matching numpad digits.
-5. In VS Code or Notepad, highlight a unique string, press `Ctrl+Shift+5`, then reopen the SuperPaste editor and confirm `A5` for the resolved workspace profile now contains that string.
-6. Highlight a different unique string, press `Ctrl+Alt+Shift+6`, then confirm `B6` in the global workflow profile now contains that string.
+5. In VS Code or Notepad, highlight a unique string, press `Ctrl+Shift+5`, then reopen the SuperPaste editor and confirm `A5` for the resolved workspace profile now contains that string and the combo stack contains A5 when auto-queue captures is enabled.
+6. Highlight a different unique string, press `Ctrl+Alt+Shift+6`, then confirm `B6` in the global workflow profile now contains that string and the combo stack contains B6 when auto-queue captures is enabled.
 7. Toggle `Pause hotkeys`, return to the harness textarea, and confirm slot hotkeys no longer fire. Toggle it back on and verify hotkeys resume.
 8. Queue a context slot and a workflow slot in the dock, then use `Paste combo`, `Copy combo`, `Remove last`, and `Clear queue` to confirm the queue stays consistent.
 9. Latch a Bank B stance, fire a direct slot paste, and confirm the stance remains active for later combo finalization until you unlatch it.
@@ -123,6 +123,6 @@
 - [x] Renderer, CLI, domain, and application-core automation are green.
 - [ ] Full foreground-app keystroke proof was not cleanly automatable from this shell session, so human Windows smoke remains the last mile for paste/save behavior.
 - [ ] Clipboard restore currently preserves text clipboard contents only, not arbitrary rich clipboard formats.
-- [ ] Native combo hotkeys beyond direct slot paste/save are not wired yet.
+- [x] Native combo hotkeys for paste, clear, and replay route into the renderer combo buffer.
 - [ ] Experimental chord mode is not implemented in this pass.
 - [ ] Plain debug-mode `cargo test` can be blocked on this Windows machine by Application Control policy (`os error 4551`), so native verification uses the release-profile test path.

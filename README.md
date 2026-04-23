@@ -37,7 +37,8 @@ Default hotkeys (numpad-primary, top-row digits also work):
 - `Ctrl+Shift+Numpad1..0` capture the focused selection into Bank A slots
 - `Ctrl+Alt+Shift+Numpad1..0` capture the focused selection into Bank B slots
 - The top-row digit keys mirror the same slots, so both numpad and top-row digits work.
-- Save hotkeys synthesize the appropriate copy gesture (`Ctrl+C` for editors, `Ctrl+Shift+C` for terminals) against the focused selection, then store the captured text in the target slot.
+- Save hotkeys synthesize the appropriate copy gesture (`Ctrl+C` for editors, `Ctrl+Shift+C` for terminals) against the focused selection, fall back to the alternate copy chord if the clipboard does not change, then store the captured text in the target slot.
+- Captured slots auto-queue by default, so you can load several clips and discharge the assembled stack without opening the dock.
 - Paste hotkeys automatically use `Ctrl+Shift+V` in terminal-like windows (Windows Terminal, PowerShell, Opencode, WezTerm, etc.) and `Ctrl+V` everywhere else.
 
 Combo/runtime hotkeys:
@@ -74,6 +75,7 @@ The Combo HUD lets you:
 - copy the assembled output without pasting
 - paste the assembled output into the focused app
 - replay the last finalized combo
+- drive paste, clear, replay, and dock visibility from native hotkeys or the tray menu
 
 The meter shows:
 - character count

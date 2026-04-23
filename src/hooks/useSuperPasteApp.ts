@@ -370,6 +370,27 @@ export function useSuperPasteApp() {
             setEditorProfileId(payload.profileId);
           }
           break;
+        case "paste-combo":
+          await pasteCombo();
+          break;
+        case "clear-combo":
+          await cancelCombo();
+          break;
+        case "replay-combo":
+          await replayLastCombo();
+          break;
+        case "queue-slot":
+          if ((payload.bankId === "A" || payload.bankId === "B") && typeof payload.slotIndex === "number") {
+            const snapshot = await engineRef.current?.queueSlot({
+              bankId: payload.bankId,
+              slotIndex: payload.slotIndex,
+            });
+            if (snapshot) {
+              syncFromEngine(snapshot);
+              setLastActionMessage(`Captured and queued ${payload.bankId}${payload.slotIndex + 1}.`);
+            }
+          }
+          break;
         default:
           break;
       }

@@ -220,11 +220,12 @@ That state stays out of portable pack import/export on purpose.
 
 ### Save-to-slot
 1. Active window is resolved first.
-2. Clipboard is read.
+2. Native capture sends the preferred copy chord for the detected host and falls back to the alternate chord if the clipboard does not change.
 3. Bank A saves into the resolved workspace profile.
 4. Bank B saves into the global workflow profile by default.
 5. Existing slot metadata such as template mode and assembly role is preserved.
 6. Blank clipboard reads become an explicit no-op instead of overwriting a slot.
+7. Captured slots auto-queue by default through a renderer command, so the same hotkey path can build a combo stack.
 
 ### Manual smoke harness
 1. The main shell can open a dedicated test-harness window.
@@ -244,7 +245,7 @@ Passed:
 
 ## Current caveats
 
-- Direct slot paste/save hotkeys are native and real; combo finalize/cancel/remove-last/replay are still dock-driven, not native-hotkey-driven.
+- Direct slot paste/save hotkeys and combo finalize/cancel/replay hotkeys are native and route into the same renderer combo buffer.
 - Manual Windows foreground-app smoke is still recommended for last-mile proof in VS Code, Windows Terminal, and Notepad.
 - Clipboard restore currently preserves text clipboard contents only.
 - Native workspace-path matching is still weaker than title/process matching.

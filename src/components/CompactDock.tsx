@@ -208,7 +208,7 @@ function BankSection({
           </div>
         </div>
         <span className="text-[0.6rem] text-[var(--color-text-faint)] font-mono">
-          {isBankA ? "Ctrl+1..0" : "Ctrl+Alt+1..0"}
+          {isBankA ? "Ctrl+Num1..0" : "Ctrl+Alt+Num1..0"}
         </span>
       </div>
 
@@ -236,7 +236,11 @@ export function CompactDock({
   supers,
   activeBuffer,
   finalizedPreview,
+  activeProfileName,
+  profileReason,
   isPasteReady,
+  isHotkeysPaused,
+  hasHotkeyWarnings,
   onPasteSlot,
   onEditSlot,
   onQueueSlot,
@@ -252,17 +256,39 @@ export function CompactDock({
   const roughTokens = Math.ceil(totalChars / 4);
   const hasQueue =
     activeBuffer.queuedEntries.length > 0 || activeBuffer.activeStances.length > 0;
+  const runtimeState = isHotkeysPaused ? "Paused" : hasHotkeyWarnings ? "Degraded" : "Armed";
+  const stanceCount = activeBuffer.activeStances.length;
 
   return (
     <section className="dock-column scrollbar-thin">
       {/* ============================================
           COMBO HUD
           ============================================ */}
-      <article className="card">
+      <article className="card controller-card">
+        <div className="controller-strip">
+          <div className="controller-cell">
+            <span className="section-label">Profile</span>
+            <strong className="controller-value">{activeProfileName}</strong>
+            <span className="controller-subvalue">{profileReason}</span>
+          </div>
+          <div className="controller-cell">
+            <span className="section-label">Queue</span>
+            <strong className="controller-value">{activeBuffer.queuedEntries.length}</strong>
+            <span className="controller-subvalue">{`${stanceCount} stance${stanceCount === 1 ? "" : "s"}`}</span>
+          </div>
+          <div className="controller-cell">
+            <span className="section-label">Bridge</span>
+            <strong className={`controller-value ${isPasteReady && !isHotkeysPaused ? "is-live" : "is-muted"}`}>
+              {runtimeState}
+            </strong>
+            <span className="controller-subvalue">{isPasteReady ? "native paste" : "preview only"}</span>
+          </div>
+        </div>
+
         <div className="surface-header">
           <div className="flex items-center gap-2">
             <Zap size={14} className="text-[var(--color-accent-a)]" />
-            <span className="section-title">Combo</span>
+            <span className="section-title">Combo stack</span>
           </div>
           <div className="flex items-center gap-2 text-[0.65rem] text-[var(--color-text-muted)] font-mono">
             <span>{totalChars.toLocaleString()} chars</span>
@@ -299,7 +325,7 @@ export function CompactDock({
           })}
           {!hasQueue && (
             <span className="text-xs text-[var(--color-text-faint)] italic">
-              Click slots to add to combo
+              Empty stack
             </span>
           )}
         </div>
@@ -324,10 +350,18 @@ export function CompactDock({
             onClick={onRemoveLast}
             type="button"
             disabled={!hasQueue}
+            title="Remove last"
+            aria-label="Remove last"
           >
             <Trash2 size={12} />
           </button>
-          <button className="btn btn-sm btn-ghost" onClick={onReplayLast} type="button">
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={onReplayLast}
+            type="button"
+            title="Replay last"
+            aria-label="Replay last"
+          >
             <RotateCcw size={12} />
           </button>
           <button
@@ -335,6 +369,8 @@ export function CompactDock({
             onClick={onCancelCombo}
             type="button"
             disabled={!hasQueue}
+            title="Clear combo"
+            aria-label="Clear combo"
           >
             <X size={12} />
           </button>

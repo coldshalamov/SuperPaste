@@ -72,13 +72,12 @@ Shipped packs:
 
 - Clipboard restore is currently text-first, not full rich-clipboard fidelity.
 - The app is built and instrumented for direct paste and save into focused Windows apps, but still deserves manual smoke in Notepad, VS Code, and Windows Terminal before broader rollout.
-- Native combo-management hotkeys remain conservative relative to the direct slot hotkeys.
+- IDE-integrated terminals still depend on top-level window heuristics, so terminal copy/paste routing inside `code.exe`/`cursor.exe`-style hosts still deserves manual verification.
 - There is no dedicated in-app native log viewer yet.
 
 ## Next sensible improvements
 
 - Finish a richer clipboard restore path
-- Add dedicated native combo hotkeys for finalize, clear, remove-last, and replay
 - Add an in-app diagnostics panel for hotkey registration and native bridge logs
 - Add final always-on-top and compact-mode polish
 

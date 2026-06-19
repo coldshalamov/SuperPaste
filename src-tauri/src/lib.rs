@@ -1,8 +1,8 @@
 mod engine;
 
 use engine::{
-    ActiveWindowSnapshot, NativeEngine, NativeRuntimeSnapshot, PastePlan, PasteResult,
-    PersistenceSnapshot,
+    ActiveWindowSnapshot, NativeDiagnosticsSnapshot, NativeEngine, NativeRuntimeSnapshot,
+    PastePlan, PasteResult, PersistenceSnapshot,
 };
 use tauri::{
     menu::{IsMenuItem, Menu, MenuItem, Submenu},
@@ -48,6 +48,13 @@ fn get_native_runtime_snapshot(
 }
 
 #[tauri::command]
+fn get_native_diagnostics_snapshot(
+    engine: State<'_, NativeEngine>,
+) -> Result<NativeDiagnosticsSnapshot, String> {
+    engine.diagnostics_snapshot()
+}
+
+#[tauri::command]
 fn get_active_window_snapshot(
     engine: State<'_, NativeEngine>,
 ) -> Result<ActiveWindowSnapshot, String> {
@@ -74,6 +81,14 @@ fn execute_native_paste_plan(
     plan: PastePlan,
 ) -> Result<PasteResult, String> {
     engine.execute_paste_plan(&app, plan)
+}
+
+#[tauri::command]
+fn set_editor_profile_hint(
+    engine: State<'_, NativeEngine>,
+    profile_id: Option<String>,
+) -> Result<(), String> {
+    engine.set_editor_profile_hint(profile_id)
 }
 
 #[tauri::command]
@@ -278,8 +293,8 @@ fn setup_tray(app: &mut tauri::App, engine: &NativeEngine) -> tauri::Result<()> 
             }
             "toggle_hotkeys" => emit_app_command(app, "toggle-hotkeys", None),
             "paste_combo" => emit_app_command(app, "paste-combo", None),
-            "replay_combo" => emit_app_command(app, "replay-combo", None),
-            "clear_combo" => emit_app_command(app, "clear-combo", None),
+            "replay_combo" => emit_app_command(app, "replay-last-combo", None),
+            "clear_combo" => emit_app_command(app, "cancel-combo", None),
             "quit" => app.exit(0),
             id if id == "profile:auto" => emit_app_command(app, "switch-profile", None),
             id if id.starts_with("profile:") => emit_app_command(
@@ -339,10 +354,12 @@ pub fn run() {
             save_persistence_snapshot,
             refresh_native_runtime,
             get_native_runtime_snapshot,
+            get_native_diagnostics_snapshot,
             get_active_window_snapshot,
             read_system_clipboard_text,
             write_system_clipboard_text,
             execute_native_paste_plan,
+            set_editor_profile_hint,
             open_test_harness_window
         ])
         .run(tauri::generate_context!())

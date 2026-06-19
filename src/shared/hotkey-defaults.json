@@ -1,0 +1,55 @@
+{
+  "bankAPaste": [
+    "Ctrl+Numpad1",
+    "Ctrl+Numpad2",
+    "Ctrl+Numpad3",
+    "Ctrl+Numpad4",
+    "Ctrl+Numpad5",
+    "Ctrl+Numpad6",
+    "Ctrl+Numpad7",
+    "Ctrl+Numpad8",
+    "Ctrl+Numpad9",
+    "Ctrl+Numpad0"
+  ],
+  "bankBPaste": [
+    "Ctrl+Alt+Numpad1",
+    "Ctrl+Alt+Numpad2",
+    "Ctrl+Alt+Numpad3",
+    "Ctrl+Alt+Numpad4",
+    "Ctrl+Alt+Numpad5",
+    "Ctrl+Alt+Numpad6",
+    "Ctrl+Alt+Numpad7",
+    "Ctrl+Alt+Numpad8",
+    "Ctrl+Alt+Numpad9",
+    "Ctrl+Alt+Numpad0"
+  ],
+  "bankASaveClipboard": [
+    "Ctrl+Shift+Numpad1",
+    "Ctrl+Shift+Numpad2",
+    "Ctrl+Shift+Numpad3",
+    "Ctrl+Shift+Numpad4",
+    "Ctrl+Shift+Numpad5",
+    "Ctrl+Shift+Numpad6",
+    "Ctrl+Shift+Numpad7",
+    "Ctrl+Shift+Numpad8",
+    "Ctrl+Shift+Numpad9",
+    "Ctrl+Shift+Numpad0"
+  ],
+  "bankBSaveClipboard": [
+    "Ctrl+Alt+Shift+Numpad1",
+    "Ctrl+Alt+Shift+Numpad2",
+    "Ctrl+Alt+Shift+Numpad3",
+    "Ctrl+Alt+Shift+Numpad4",
+    "Ctrl+Alt+Shift+Numpad5",
+    "Ctrl+Alt+Shift+Numpad6",
+    "Ctrl+Alt+Shift+Numpad7",
+    "Ctrl+Alt+Shift+Numpad8",
+    "Ctrl+Alt+Shift+Numpad9",
+    "Ctrl+Alt+Shift+Numpad0"
+  ],
+  "finalizeCombo": "Ctrl+NumpadEnter",
+  "cancelCombo": "Ctrl+NumpadDecimal",
+  "replayLastCombo": "Ctrl+NumpadAdd",
+  "toggleWindow": "Ctrl+NumpadSubtract",
+  "panicToggle": "Ctrl+Pause"
+}

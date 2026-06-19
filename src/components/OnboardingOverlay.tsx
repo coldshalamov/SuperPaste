@@ -65,17 +65,17 @@ const steps: Step[] = [
         <div className="flex items-center gap-2">
           <KeyBadge text="Ctrl" variant="a" />
           <span className="text-sm">+</span>
-          <KeyBadge text="1..0" variant="a" />
+          <KeyBadge text="Numpad1..0" variant="a" />
           <span className="text-xs text-[var(--color-text-muted)] ml-2">Bank A</span>
         </div>
         <div className="flex items-center gap-2">
           <KeyBadge text="Ctrl+Alt" variant="b" />
           <span className="text-sm">+</span>
-          <KeyBadge text="1..0" variant="b" />
+          <KeyBadge text="Numpad1..0" variant="b" />
           <span className="text-xs text-[var(--color-text-muted)] ml-2">Bank B</span>
         </div>
         <p className="text-[0.65rem] text-[var(--color-text-faint)] m-0 text-center mt-1">
-          Swaps clipboard, pastes, restores. Numpad mirrors slots.
+          Swaps clipboard, pastes, restores. Numpad bindings are the default hot path.
         </p>
       </div>
     ),
@@ -87,7 +87,7 @@ const steps: Step[] = [
         <div className="flex items-center gap-2">
           <KeyBadge text="Ctrl+Shift" variant="a" />
           <span className="text-sm">+</span>
-          <KeyBadge text="1..0" variant="a" />
+          <KeyBadge text="Numpad1..0" variant="a" />
         </div>
         <p className="text-xs text-[var(--color-text-secondary)] m-0 text-center">
           Highlight text, then press to bank it. SuperPaste copies for you.
@@ -110,7 +110,7 @@ const steps: Step[] = [
           Click slots to queue them, then paste the whole packet.
         </p>
         <p className="text-[0.65rem] text-[var(--color-text-faint)] m-0 text-center">
-          Press <KeyBadge text="Alt+Enter" variant="neutral" /> to fire.
+          Press <KeyBadge text="Ctrl+NumpadEnter" variant="neutral" /> to fire.
         </p>
       </div>
     ),

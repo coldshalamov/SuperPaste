@@ -39,6 +39,7 @@ pub const APP_SCHEMA_VERSION: u32 = 1;
 const SETTINGS_FILE: &str = "settings.json";
 const PROFILES_FILE: &str = "profiles.json";
 const NATIVE_LOG_FILE: &str = "native.log";
+const HOTKEY_DEFAULTS_JSON: &str = include_str!("../../src/shared/hotkey-defaults.json");
 const SLOT_DIGITS_STANDARD: [&str; 10] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 const SLOT_DIGITS_ZERO_FIRST: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 const NUMPAD_DIGITS_STANDARD: [&str; 10] = [
@@ -105,6 +106,31 @@ pub struct NativeRuntimeSnapshot {
     pub active_window: ActiveWindowSnapshot,
     pub native_paste_ready: bool,
     pub panic_mode_enabled: bool,
+    pub degraded_mode: bool,
+    pub registered_binding_count: usize,
+    pub failed_binding_count: usize,
+    pub active_profile_override_id: Option<String>,
+    pub last_editor_profile_id: Option<String>,
+    pub resolved_profile_id: String,
+    pub resolved_profile_reason: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeDiagnosticsSnapshot {
+    pub app_data_dir: String,
+    pub last_status_message: String,
+    pub active_window: ActiveWindowSnapshot,
+    pub hotkey_summary: String,
+    pub degraded_mode: bool,
+    pub current_hotkeys: HotkeyMapping,
+    pub registered_bindings: Vec<String>,
+    pub failed_bindings: Vec<String>,
+    pub active_profile_override_id: Option<String>,
+    pub last_editor_profile_id: Option<String>,
+    pub resolved_profile_id: String,
+    pub resolved_profile_reason: String,
+    pub recent_log_entries: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -155,7 +181,9 @@ struct NativeEngineInner {
     status: RwLock<String>,
     active_window: RwLock<ActiveWindowSnapshot>,
     hotkeys: RwLock<HashMap<String, HotkeyAction>>,
+    failed_bindings: RwLock<Vec<String>>,
     hotkey_summary: RwLock<String>,
+    last_editor_profile_id: RwLock<Option<String>>,
 }
 
 #[derive(Clone)]
@@ -203,7 +231,7 @@ struct AppSettings {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct HotkeyMapping {
+pub struct HotkeyMapping {
     bank_a_paste: Vec<String>,
     bank_b_paste: Vec<String>,
     bank_a_save_clipboard: Vec<String>,
@@ -328,6 +356,7 @@ struct ResolvedProfile {
     profile: Profile,
     effective_bank_a: SlotBank,
     effective_bank_b: SlotBank,
+    reason: String,
     score: i32,
 }
 
@@ -340,18 +369,6 @@ enum HotkeyAction {
     ReplayLastCombo,
     ToggleWindow,
     PanicToggle,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum CopyChord {
-    CtrlC,
-    CtrlShiftC,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PasteChord {
-    CtrlV,
-    CtrlShiftV,
 }
 
 fn default_template_mode() -> String {
@@ -379,18 +396,8 @@ fn build_slot_hotkeys(prefix: &str, digits: &[&str; 10]) -> Vec<String> {
 }
 
 fn default_hotkeys() -> HotkeyMapping {
-    HotkeyMapping {
-        bank_a_paste: build_slot_hotkeys("Ctrl+", &NUMPAD_DIGITS_STANDARD),
-        bank_b_paste: build_slot_hotkeys("Ctrl+Alt+", &NUMPAD_DIGITS_STANDARD),
-        bank_a_save_clipboard: build_slot_hotkeys("Ctrl+Shift+", &NUMPAD_DIGITS_STANDARD),
-        bank_b_save_clipboard: build_slot_hotkeys("Ctrl+Alt+Shift+", &NUMPAD_DIGITS_STANDARD),
-        finalize_combo: "Ctrl+NumpadEnter".to_string(),
-        cancel_combo: "Ctrl+NumpadDecimal".to_string(),
-        replay_last_combo: "Ctrl+NumpadAdd".to_string(),
-        toggle_window: "Ctrl+NumpadSubtract".to_string(),
-        panic_toggle: "Ctrl+Pause".to_string(),
-        extra: HashMap::new(),
-    }
+    serde_json::from_str(HOTKEY_DEFAULTS_JSON)
+        .expect("shared hotkey defaults must deserialize for the native runtime")
 }
 
 fn matches_binding_pattern(bindings: &[String], prefix: &str, digits: &[&str; 10]) -> bool {
@@ -535,7 +542,9 @@ impl NativeEngine {
                 status: RwLock::new(status_message.clone()),
                 active_window: RwLock::new(ActiveWindowSnapshot::default()),
                 hotkeys: RwLock::new(HashMap::new()),
+                failed_bindings: RwLock::new(Vec::new()),
                 hotkey_summary: RwLock::new("Registering hotkeys...".to_string()),
+                last_editor_profile_id: RwLock::new(None),
             }),
         };
 
@@ -607,7 +616,7 @@ impl NativeEngine {
         self.emit_status(
             app,
             if migrated {
-                "Native runtime refreshed from latest saved settings. Migrated hotkeys to Ctrl digit defaults and kept numpad aliases active."
+                "Native runtime refreshed from latest saved settings. Migrated hotkeys to the canonical Ctrl+Numpad defaults."
             } else {
                 "Native runtime refreshed from latest saved settings."
             },
@@ -622,34 +631,44 @@ impl NativeEngine {
             .read()
             .map_err(|_| "active window lock poisoned".to_string())?
             .clone();
+        let resolved_profile = self.resolve_profile(&active_window)?;
         let hotkey_summary = self
             .inner
             .hotkey_summary
             .read()
             .map_err(|_| "hotkey summary lock poisoned".to_string())?
             .clone();
+        let registered_binding_count = self
+            .inner
+            .hotkeys
+            .read()
+            .map_err(|_| "hotkeys lock poisoned".to_string())?
+            .len();
+        let failed_binding_count = self
+            .inner
+            .failed_bindings
+            .read()
+            .map_err(|_| "failed bindings lock poisoned".to_string())?
+            .len();
         let last_status_message = self
             .inner
             .status
             .read()
             .map_err(|_| "status lock poisoned".to_string())?
             .clone();
-        let panic_mode_enabled = self
+        let settings = self
             .inner
             .documents
             .read()
             .map_err(|_| "documents lock poisoned".to_string())?
             .settings_document
             .settings
-            .panic_mode_enabled;
+            .clone();
 
-        let native_paste_ready = !panic_mode_enabled
-            && !self
-                .inner
-                .hotkeys
-                .read()
-                .map_err(|_| "hotkeys lock poisoned".to_string())?
-                .is_empty();
+        let panic_mode_enabled = settings.panic_mode_enabled;
+        let degraded_mode = failed_binding_count > 0;
+
+        let native_paste_ready = !panic_mode_enabled && registered_binding_count > 0;
 
         Ok(NativeRuntimeSnapshot {
             app_data_dir: self.inner.app_data_dir.display().to_string(),
@@ -658,6 +677,80 @@ impl NativeEngine {
             active_window,
             native_paste_ready,
             panic_mode_enabled,
+            degraded_mode,
+            registered_binding_count,
+            failed_binding_count,
+            active_profile_override_id: settings.active_profile_id_override,
+            last_editor_profile_id: self
+                .inner
+                .last_editor_profile_id
+                .read()
+                .map_err(|_| "editor profile hint lock poisoned".to_string())?
+                .clone(),
+            resolved_profile_id: resolved_profile.profile.id,
+            resolved_profile_reason: resolved_profile.reason,
+        })
+    }
+
+    pub fn diagnostics_snapshot(&self) -> Result<NativeDiagnosticsSnapshot, String> {
+        let active_window = self
+            .inner
+            .active_window
+            .read()
+            .map_err(|_| "active window lock poisoned".to_string())?
+            .clone();
+        let resolved_profile = self.resolve_profile(&active_window)?;
+        let documents = self
+            .inner
+            .documents
+            .read()
+            .map_err(|_| "documents lock poisoned".to_string())?;
+        let hotkeys = self
+            .inner
+            .hotkeys
+            .read()
+            .map_err(|_| "hotkeys lock poisoned".to_string())?;
+        let registered_bindings = sorted_registered_bindings(&hotkeys);
+        let failed_bindings = self
+            .inner
+            .failed_bindings
+            .read()
+            .map_err(|_| "failed bindings lock poisoned".to_string())?
+            .clone();
+
+        Ok(NativeDiagnosticsSnapshot {
+            app_data_dir: self.inner.app_data_dir.display().to_string(),
+            last_status_message: self
+                .inner
+                .status
+                .read()
+                .map_err(|_| "status lock poisoned".to_string())?
+                .clone(),
+            active_window,
+            hotkey_summary: self
+                .inner
+                .hotkey_summary
+                .read()
+                .map_err(|_| "hotkey summary lock poisoned".to_string())?
+                .clone(),
+            degraded_mode: !failed_bindings.is_empty(),
+            current_hotkeys: documents.settings_document.settings.hotkeys.clone(),
+            registered_bindings,
+            failed_bindings,
+            active_profile_override_id: documents
+                .settings_document
+                .settings
+                .active_profile_id_override
+                .clone(),
+            last_editor_profile_id: self
+                .inner
+                .last_editor_profile_id
+                .read()
+                .map_err(|_| "editor profile hint lock poisoned".to_string())?
+                .clone(),
+            resolved_profile_id: resolved_profile.profile.id,
+            resolved_profile_reason: resolved_profile.reason,
+            recent_log_entries: read_native_log_tail(&self.inner.app_data_dir, 50)?,
         })
     }
 
@@ -681,6 +774,15 @@ impl NativeEngine {
         self.refresh_hotkeys(app)?;
         self.refresh_active_window()?;
         self.runtime_snapshot()
+    }
+
+    pub fn set_editor_profile_hint(&self, profile_id: Option<String>) -> Result<(), String> {
+        *self
+            .inner
+            .last_editor_profile_id
+            .write()
+            .map_err(|_| "editor profile hint lock poisoned".to_string())? = profile_id;
+        Ok(())
     }
 
     pub fn refresh_active_window(&self) -> Result<ActiveWindowSnapshot, String> {
@@ -832,6 +934,11 @@ impl NativeEngine {
             }
         }
 
+        let _ = append_native_log(
+            &self.inner.app_data_dir,
+            &format!("HOTKEY ACTION {:?}", action),
+        );
+
         match action {
             HotkeyAction::PasteSlot {
                 bank_id,
@@ -858,15 +965,12 @@ impl NativeEngine {
             }
             HotkeyAction::FinalizeCombo => {
                 super::emit_app_command(app, "paste-combo", None);
-                self.emit_status(app, "Combo discharge requested from hotkey.")?;
             }
             HotkeyAction::CancelCombo => {
-                super::emit_app_command(app, "clear-combo", None);
-                self.emit_status(app, "Combo clear requested from hotkey.")?;
+                super::emit_app_command(app, "cancel-combo", None);
             }
             HotkeyAction::ReplayLastCombo => {
-                super::emit_app_command(app, "replay-combo", None);
-                self.emit_status(app, "Replay requested from hotkey.")?;
+                super::emit_app_command(app, "replay-last-combo", None);
             }
             HotkeyAction::ToggleWindow => {
                 super::toggle_main_window(app);
@@ -1005,6 +1109,12 @@ impl NativeEngine {
             .documents
             .read()
             .map_err(|_| "documents lock poisoned".to_string())?;
+        let editor_profile_hint = self
+            .inner
+            .last_editor_profile_id
+            .read()
+            .map_err(|_| "editor profile hint lock poisoned".to_string())?
+            .clone();
         let target_profile_id = if bank_id == 'B' {
             documents
                 .profiles_document
@@ -1013,30 +1123,20 @@ impl NativeEngine {
                 .find(|profile| profile.kind == "global")
                 .map(|profile| profile.id.clone())
                 .unwrap_or_else(|| resolved.profile.id.clone())
-        } else if let Some(override_id) = &documents
-            .settings_document
-            .settings
-            .active_profile_id_override
-        {
-            override_id.clone()
         } else {
-            resolved.profile.id.clone()
+            select_bank_a_target_profile_id(&documents, &resolved, editor_profile_hint.as_deref())
         };
 
         let _ = append_native_log(
             &self.inner.app_data_dir,
             &format!(
-                "SAVE target profile={} bank={} slot={} resolved_profile={} override={}",
+                "SAVE target profile={} bank={} slot={} resolved_profile={} override={} editor_hint={}",
                 target_profile_id,
                 bank_id,
                 slot_index + 1,
                 resolved.profile.id,
-                documents
-                    .settings_document
-                    .settings
-                    .active_profile_id_override
-                    .as_deref()
-                    .unwrap_or("none"),
+                documents.settings_document.settings.active_profile_id_override.as_deref().unwrap_or("none"),
+                editor_profile_hint.as_deref().unwrap_or("none"),
             ),
         );
 
@@ -1133,100 +1233,7 @@ impl NativeEngine {
             .settings_document
             .settings
             .clone();
-        let mut bindings = Vec::new();
-
-        for (slot_index, binding) in settings.hotkeys.bank_a_paste.iter().enumerate() {
-            bindings.push((
-                binding.clone(),
-                HotkeyAction::PasteSlot {
-                    bank_id: 'A',
-                    slot_index,
-                },
-            ));
-            if let Some(alias) = to_alias_binding(binding) {
-                bindings.push((
-                    alias,
-                    HotkeyAction::PasteSlot {
-                        bank_id: 'A',
-                        slot_index,
-                    },
-                ));
-            }
-        }
-        for (slot_index, binding) in settings.hotkeys.bank_b_paste.iter().enumerate() {
-            bindings.push((
-                binding.clone(),
-                HotkeyAction::PasteSlot {
-                    bank_id: 'B',
-                    slot_index,
-                },
-            ));
-            if let Some(alias) = to_alias_binding(binding) {
-                bindings.push((
-                    alias,
-                    HotkeyAction::PasteSlot {
-                        bank_id: 'B',
-                        slot_index,
-                    },
-                ));
-            }
-        }
-        for (slot_index, binding) in settings.hotkeys.bank_a_save_clipboard.iter().enumerate() {
-            bindings.push((
-                binding.clone(),
-                HotkeyAction::SaveClipboardToSlot {
-                    bank_id: 'A',
-                    slot_index,
-                },
-            ));
-            if let Some(alias) = to_alias_binding(binding) {
-                bindings.push((
-                    alias,
-                    HotkeyAction::SaveClipboardToSlot {
-                        bank_id: 'A',
-                        slot_index,
-                    },
-                ));
-            }
-        }
-        for (slot_index, binding) in settings.hotkeys.bank_b_save_clipboard.iter().enumerate() {
-            bindings.push((
-                binding.clone(),
-                HotkeyAction::SaveClipboardToSlot {
-                    bank_id: 'B',
-                    slot_index,
-                },
-            ));
-            if let Some(alias) = to_alias_binding(binding) {
-                bindings.push((
-                    alias,
-                    HotkeyAction::SaveClipboardToSlot {
-                        bank_id: 'B',
-                        slot_index,
-                    },
-                ));
-            }
-        }
-        bindings.push((
-            settings.hotkeys.finalize_combo.clone(),
-            HotkeyAction::FinalizeCombo,
-        ));
-        bindings.push((
-            settings.hotkeys.cancel_combo.clone(),
-            HotkeyAction::CancelCombo,
-        ));
-        bindings.push((
-            settings.hotkeys.replay_last_combo.clone(),
-            HotkeyAction::ReplayLastCombo,
-        ));
-        bindings.push((
-            settings.hotkeys.toggle_window.clone(),
-            HotkeyAction::ToggleWindow,
-        ));
-        bindings.push((
-            settings.hotkeys.panic_toggle.clone(),
-            HotkeyAction::PanicToggle,
-        ));
+        let bindings = hotkey_bindings_from_settings(&settings);
 
         let mut seen = HashSet::new();
         let mut registered = 0usize;
@@ -1275,10 +1282,19 @@ impl NativeEngine {
             .map_err(|_| "hotkeys lock poisoned".to_string())? = hotkey_actions;
         *self
             .inner
+            .failed_bindings
+            .write()
+            .map_err(|_| "failed bindings lock poisoned".to_string())? = failed_bindings.clone();
+        *self
+            .inner
             .hotkey_summary
             .write()
             .map_err(|_| "hotkey summary lock poisoned".to_string())? =
-            format!("Hotkeys live: {registered} registered, {failed} unavailable.");
+            if failed_bindings.is_empty() {
+                format!("Hotkeys live: {registered} registered, all direct bindings healthy.")
+            } else {
+                format!("Hotkeys degraded: {registered} registered, {failed} unavailable.")
+            };
         let log_message = if failed_bindings.is_empty() {
             format!("Hotkeys refreshed: {registered} registered, {failed} unavailable.")
         } else {
@@ -1309,6 +1325,69 @@ impl NativeEngine {
     }
 }
 
+fn hotkey_bindings_from_settings(settings: &AppSettings) -> Vec<(String, HotkeyAction)> {
+    let mut bindings = Vec::new();
+
+    for (slot_index, binding) in settings.hotkeys.bank_a_paste.iter().enumerate() {
+        bindings.push((
+            binding.clone(),
+            HotkeyAction::PasteSlot {
+                bank_id: 'A',
+                slot_index,
+            },
+        ));
+    }
+    for (slot_index, binding) in settings.hotkeys.bank_b_paste.iter().enumerate() {
+        bindings.push((
+            binding.clone(),
+            HotkeyAction::PasteSlot {
+                bank_id: 'B',
+                slot_index,
+            },
+        ));
+    }
+    for (slot_index, binding) in settings.hotkeys.bank_a_save_clipboard.iter().enumerate() {
+        bindings.push((
+            binding.clone(),
+            HotkeyAction::SaveClipboardToSlot {
+                bank_id: 'A',
+                slot_index,
+            },
+        ));
+    }
+    for (slot_index, binding) in settings.hotkeys.bank_b_save_clipboard.iter().enumerate() {
+        bindings.push((
+            binding.clone(),
+            HotkeyAction::SaveClipboardToSlot {
+                bank_id: 'B',
+                slot_index,
+            },
+        ));
+    }
+    bindings.push((
+        settings.hotkeys.finalize_combo.clone(),
+        HotkeyAction::FinalizeCombo,
+    ));
+    bindings.push((
+        settings.hotkeys.cancel_combo.clone(),
+        HotkeyAction::CancelCombo,
+    ));
+    bindings.push((
+        settings.hotkeys.replay_last_combo.clone(),
+        HotkeyAction::ReplayLastCombo,
+    ));
+    bindings.push((
+        settings.hotkeys.toggle_window.clone(),
+        HotkeyAction::ToggleWindow,
+    ));
+    bindings.push((
+        settings.hotkeys.panic_toggle.clone(),
+        HotkeyAction::PanicToggle,
+    ));
+
+    bindings
+}
+
 fn load_or_seed_documents(app_data_dir: &Path) -> Result<LoadDocumentsResult, String> {
     let defaults = default_documents();
     let mut notices = Vec::new();
@@ -1331,9 +1410,7 @@ fn load_or_seed_documents(app_data_dir: &Path) -> Result<LoadDocumentsResult, St
     if migrated {
         settings_document.settings.hotkeys = migrated_hotkeys;
         settings_document.saved_at_iso = now_iso();
-        notices.push(
-            "Migrated saved hotkeys to Ctrl+Numpad defaults with top-row aliases.".to_string(),
-        );
+        notices.push("Migrated saved hotkeys to the canonical Ctrl+Numpad defaults.".to_string());
     }
 
     if !app_data_dir.join(SETTINGS_FILE).exists()
@@ -1501,6 +1578,40 @@ fn apply_slot_save_to_documents(
     next_documents
 }
 
+fn select_bank_a_target_profile_id(
+    documents: &RuntimeDocuments,
+    resolved: &ResolvedProfile,
+    last_editor_profile_id: Option<&str>,
+) -> String {
+    if let Some(override_id) = &documents
+        .settings_document
+        .settings
+        .active_profile_id_override
+    {
+        if documents
+            .profiles_document
+            .profiles
+            .iter()
+            .any(|profile| profile.id == *override_id)
+        {
+            return override_id.clone();
+        }
+    }
+
+    if let Some(editor_profile_id) = last_editor_profile_id {
+        if documents
+            .profiles_document
+            .profiles
+            .iter()
+            .any(|profile| profile.id == editor_profile_id)
+        {
+            return editor_profile_id.to_string();
+        }
+    }
+
+    resolved.profile.id.clone()
+}
+
 fn toggled_panic_documents(documents: &RuntimeDocuments) -> RuntimeDocuments {
     let mut next_documents = documents.clone();
     next_documents.settings_document.settings.panic_mode_enabled =
@@ -1521,6 +1632,32 @@ fn append_native_log(app_data_dir: &Path, message: &str) -> Result<(), String> {
         .map_err(|error| format!("failed to open native log {}: {error}", path.display()))?;
     writeln!(file, "{} {}", now_iso(), message)
         .map_err(|error| format!("failed to append native log {}: {error}", path.display()))
+}
+
+fn read_native_log_tail(app_data_dir: &Path, limit: usize) -> Result<Vec<String>, String> {
+    let path = app_data_dir.join(NATIVE_LOG_FILE);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let contents = fs::read_to_string(&path)
+        .map_err(|error| format!("failed to read native log {}: {error}", path.display()))?;
+
+    Ok(contents
+        .lines()
+        .rev()
+        .take(limit)
+        .map(|line| line.to_string())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect())
+}
+
+fn sorted_registered_bindings(hotkeys: &HashMap<String, HotkeyAction>) -> Vec<String> {
+    let mut bindings = hotkeys.keys().cloned().collect::<Vec<_>>();
+    bindings.sort();
+    bindings
 }
 
 fn default_documents() -> RuntimeDocuments {
@@ -1693,6 +1830,7 @@ fn resolve_profile(
                 profile: materialized.clone(),
                 effective_bank_a: materialized.bank_a.clone(),
                 effective_bank_b: materialized.bank_b.clone(),
+                reason: format!("Manual override to {}", materialized.name),
                 score: 999,
             });
         }
@@ -1703,7 +1841,7 @@ fn resolve_profile(
         .iter()
         .filter(|profile| profile.kind == "workspace")
     {
-        let (score, _) = score_profile(profile, active_window);
+        let (score, reason) = score_profile(profile, active_window);
         if score <= 0 {
             continue;
         }
@@ -1712,6 +1850,7 @@ fn resolve_profile(
             profile: materialized.clone(),
             effective_bank_a: materialized.bank_a.clone(),
             effective_bank_b: materialized.bank_b.clone(),
+            reason,
             score,
         };
         let replace = winner
@@ -1735,6 +1874,7 @@ fn resolve_profile(
         profile: materialized_global.clone(),
         effective_bank_a: materialized_global.bank_a.clone(),
         effective_bank_b: materialized_global.bank_b.clone(),
+        reason: "Global profile fallback".to_string(),
         score: 0,
     })
 }
@@ -1743,73 +1883,23 @@ fn materialize_profile(
     profile: &Profile,
     profile_map: &HashMap<String, Profile>,
 ) -> Result<Profile, String> {
-    let mut visiting = HashSet::new();
-    let mut cache = HashMap::new();
-    materialize_profile_internal(profile, profile_map, &mut visiting, &mut cache)
-}
-
-fn materialize_profile_internal(
-    profile: &Profile,
-    profile_map: &HashMap<String, Profile>,
-    visiting: &mut HashSet<String>,
-    cache: &mut HashMap<String, Profile>,
-) -> Result<Profile, String> {
-    if let Some(cached) = cache.get(&profile.id) {
-        return Ok(cached.clone());
-    }
-
-    if visiting.contains(&profile.id) {
-        let mut detached = profile.clone();
-        detached.extends_profile_id = None;
-        return Ok(detached);
-    }
-
-    if profile.extends_profile_id.is_none() {
-        cache.insert(profile.id.clone(), profile.clone());
-        return Ok(profile.clone());
-    }
-
-    visiting.insert(profile.id.clone());
-    let materialized = if let Some(parent_id) = &profile.extends_profile_id {
+    if let Some(parent_id) = &profile.extends_profile_id {
         if let Some(parent) = profile_map.get(parent_id) {
-            let effective_parent =
-                materialize_profile_internal(parent, profile_map, visiting, cache)?;
-            Profile {
+            let effective_parent = materialize_profile(parent, profile_map)?;
+            return Ok(Profile {
                 bank_a: merge_banks(&effective_parent.bank_a, &profile.bank_a),
                 bank_b: merge_banks(&effective_parent.bank_b, &profile.bank_b),
-                supers: merge_supers_with_child_priority(&effective_parent.supers, &profile.supers),
+                supers: {
+                    let mut supers = effective_parent.supers.clone();
+                    supers.extend(profile.supers.clone());
+                    supers
+                },
                 ..profile.clone()
-            }
-        } else {
-            profile.clone()
-        }
-    } else {
-        profile.clone()
-    };
-
-    visiting.remove(&profile.id);
-    cache.insert(profile.id.clone(), materialized.clone());
-    Ok(materialized)
-}
-
-fn merge_supers_with_child_priority(
-    parent_supers: &[SuperRecipe],
-    child_supers: &[SuperRecipe],
-) -> Vec<SuperRecipe> {
-    let mut supers = parent_supers.to_vec();
-
-    for child_super in child_supers {
-        if let Some(existing) = supers
-            .iter_mut()
-            .find(|super_recipe| super_recipe.id == child_super.id)
-        {
-            *existing = child_super.clone();
-        } else {
-            supers.push(child_super.clone());
+            });
         }
     }
 
-    supers
+    Ok(profile.clone())
 }
 
 fn merge_banks(parent: &SlotBank, child: &SlotBank) -> SlotBank {
@@ -1939,6 +2029,126 @@ fn render_template(content: &str, clipboard: &str, profile: &str, active_app: &s
         .replace("{{date}}", &now_iso()[..10])
 }
 
+#[derive(Clone, Copy, Debug)]
+enum InputChord {
+    CtrlC,
+    CtrlShiftC,
+    CtrlV,
+    CtrlShiftV,
+}
+
+impl InputChord {
+    fn label(self) -> &'static str {
+        match self {
+            Self::CtrlC => "Ctrl+C",
+            Self::CtrlShiftC => "Ctrl+Shift+C",
+            Self::CtrlV => "Ctrl+V",
+            Self::CtrlShiftV => "Ctrl+Shift+V",
+        }
+    }
+
+    fn send(self) -> Result<(), String> {
+        let inputs = match self {
+            Self::CtrlC => vec![
+                keyboard_input(VK_CONTROL.0 as u16, false),
+                keyboard_input(b'C' as u16, false),
+                keyboard_input(b'C' as u16, true),
+                keyboard_input(VK_CONTROL.0 as u16, true),
+            ],
+            Self::CtrlShiftC => vec![
+                keyboard_input(VK_CONTROL.0 as u16, false),
+                keyboard_input(VK_SHIFT.0 as u16, false),
+                keyboard_input(b'C' as u16, false),
+                keyboard_input(b'C' as u16, true),
+                keyboard_input(VK_SHIFT.0 as u16, true),
+                keyboard_input(VK_CONTROL.0 as u16, true),
+            ],
+            Self::CtrlV => vec![
+                keyboard_input(VK_CONTROL.0 as u16, false),
+                keyboard_input(b'V' as u16, false),
+                keyboard_input(b'V' as u16, true),
+                keyboard_input(VK_CONTROL.0 as u16, true),
+            ],
+            Self::CtrlShiftV => vec![
+                keyboard_input(VK_CONTROL.0 as u16, false),
+                keyboard_input(VK_SHIFT.0 as u16, false),
+                keyboard_input(b'V' as u16, false),
+                keyboard_input(b'V' as u16, true),
+                keyboard_input(VK_SHIFT.0 as u16, true),
+                keyboard_input(VK_CONTROL.0 as u16, true),
+            ],
+        };
+
+        let sent = unsafe { SendInput(&inputs, size_of::<INPUT>() as i32) };
+        if sent != inputs.len() as u32 {
+            return Err(format!(
+                "Failed to synthesize {} into the focused app. Windows can block SendInput when the target app is elevated above SuperPaste.",
+                self.label()
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+struct InputStrategy {
+    name: &'static str,
+    copy_attempts: &'static [InputChord],
+    paste_attempts: &'static [InputChord],
+}
+
+const TERMINAL_COPY_ATTEMPTS: [InputChord; 2] = [InputChord::CtrlShiftC, InputChord::CtrlC];
+const TERMINAL_PASTE_ATTEMPTS: [InputChord; 2] = [InputChord::CtrlShiftV, InputChord::CtrlV];
+const STANDARD_COPY_ATTEMPTS: [InputChord; 1] = [InputChord::CtrlC];
+const STANDARD_PASTE_ATTEMPTS: [InputChord; 1] = [InputChord::CtrlV];
+
+const STANDARD_PROCESS_NAMES: &[&str] = &[
+    "code.exe",
+    "cursor.exe",
+    "antigravity.exe",
+    "chrome.exe",
+    "msedge.exe",
+    "firefox.exe",
+    "notepad.exe",
+];
+
+fn resolve_input_strategy(active_window: &ActiveWindowSnapshot) -> InputStrategy {
+    if looks_like_terminal_window(active_window) {
+        return InputStrategy {
+            name: "terminal-ctrl-shift",
+            copy_attempts: &TERMINAL_COPY_ATTEMPTS,
+            paste_attempts: &TERMINAL_PASTE_ATTEMPTS,
+        };
+    }
+
+    let process_name = active_window.process_name.to_lowercase();
+    if STANDARD_PROCESS_NAMES
+        .iter()
+        .any(|name| *name == process_name)
+    {
+        return InputStrategy {
+            name: "standard-ctrl",
+            copy_attempts: &STANDARD_COPY_ATTEMPTS,
+            paste_attempts: &STANDARD_PASTE_ATTEMPTS,
+        };
+    }
+
+    InputStrategy {
+        name: "default-ctrl",
+        copy_attempts: &STANDARD_COPY_ATTEMPTS,
+        paste_attempts: &STANDARD_PASTE_ATTEMPTS,
+    }
+}
+
+fn format_chord_attempts(chords: &[InputChord]) -> String {
+    chords
+        .iter()
+        .map(|chord| chord.label())
+        .collect::<Vec<_>>()
+        .join(" -> ")
+}
+
 fn paste_text_transaction(
     text: &str,
     active_window: &ActiveWindowSnapshot,
@@ -1967,12 +2177,23 @@ fn paste_text_transaction(
         };
     }
 
-    let paste_chord = paste_chord_for_window(active_window);
+    let strategy = resolve_input_strategy(active_window);
     let paste_result = (|| -> Result<(), String> {
         wait_for_hotkey_modifiers_to_release();
-        send_paste_chord(paste_chord)?;
-        thread::sleep(Duration::from_millis(100));
-        Ok(())
+        let mut last_error = None;
+        for chord in strategy.paste_attempts {
+            match chord.send() {
+                Ok(()) => {
+                    thread::sleep(Duration::from_millis(100));
+                    return Ok(());
+                }
+                Err(error) => {
+                    last_error = Some(error);
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| "No paste strategy succeeded.".to_string()))
     })();
 
     if let Some(original_clipboard) = original_clipboard {
@@ -1990,14 +2211,11 @@ fn paste_text_transaction(
             ok: true,
             message: if restore_clipboard {
                 format!(
-                    "Pasted combo into the focused app with {} and restored the text clipboard.",
-                    paste_chord_label(paste_chord)
+                    "Pasted combo into the focused app via {} and restored the text clipboard.",
+                    strategy.name
                 )
             } else {
-                format!(
-                    "Pasted combo into the focused app with {}.",
-                    paste_chord_label(paste_chord)
-                )
+                format!("Pasted combo into the focused app via {}.", strategy.name)
             },
             copied_text: None,
         },
@@ -2006,36 +2224,6 @@ fn paste_text_transaction(
             message: error,
             copied_text: None,
         },
-    }
-}
-
-fn paste_chord_for_window(active_window: &ActiveWindowSnapshot) -> PasteChord {
-    if looks_like_terminal_window(active_window) {
-        PasteChord::CtrlShiftV
-    } else {
-        PasteChord::CtrlV
-    }
-}
-
-fn paste_chord_label(chord: PasteChord) -> &'static str {
-    match chord {
-        PasteChord::CtrlV => "Ctrl+V",
-        PasteChord::CtrlShiftV => "Ctrl+Shift+V",
-    }
-}
-
-fn copy_chord_label(chord: CopyChord) -> &'static str {
-    match chord {
-        CopyChord::CtrlC => "Ctrl+C",
-        CopyChord::CtrlShiftC => "Ctrl+Shift+C",
-    }
-}
-
-fn capture_chord_candidates(active_window: &ActiveWindowSnapshot) -> Vec<CopyChord> {
-    if looks_like_terminal_window(active_window) {
-        vec![CopyChord::CtrlShiftC, CopyChord::CtrlC]
-    } else {
-        vec![CopyChord::CtrlC, CopyChord::CtrlShiftC]
     }
 }
 
@@ -2067,88 +2255,6 @@ fn wait_for_hotkey_modifiers_to_release() {
     }
 }
 
-fn send_ctrl_v() -> Result<(), String> {
-    let inputs = [
-        keyboard_input(VK_CONTROL.0 as u16, false),
-        keyboard_input(b'V' as u16, false),
-        keyboard_input(b'V' as u16, true),
-        keyboard_input(VK_CONTROL.0 as u16, true),
-    ];
-
-    let sent = unsafe { SendInput(&inputs, size_of::<INPUT>() as i32) };
-    if sent != inputs.len() as u32 {
-        return Err("Failed to synthesize Ctrl+V into the focused app.".to_string());
-    }
-
-    Ok(())
-}
-
-fn send_ctrl_shift_v() -> Result<(), String> {
-    let inputs = [
-        keyboard_input(VK_CONTROL.0 as u16, false),
-        keyboard_input(VK_SHIFT.0 as u16, false),
-        keyboard_input(b'V' as u16, false),
-        keyboard_input(b'V' as u16, true),
-        keyboard_input(VK_SHIFT.0 as u16, true),
-        keyboard_input(VK_CONTROL.0 as u16, true),
-    ];
-
-    let sent = unsafe { SendInput(&inputs, size_of::<INPUT>() as i32) };
-    if sent != inputs.len() as u32 {
-        return Err("Failed to synthesize Ctrl+Shift+V into the focused app.".to_string());
-    }
-
-    Ok(())
-}
-
-fn send_ctrl_c() -> Result<(), String> {
-    let inputs = [
-        keyboard_input(VK_CONTROL.0 as u16, false),
-        keyboard_input(b'C' as u16, false),
-        keyboard_input(b'C' as u16, true),
-        keyboard_input(VK_CONTROL.0 as u16, true),
-    ];
-
-    let sent = unsafe { SendInput(&inputs, size_of::<INPUT>() as i32) };
-    if sent != inputs.len() as u32 {
-        return Err("Failed to synthesize Ctrl+C from the focused selection.".to_string());
-    }
-
-    Ok(())
-}
-
-fn send_ctrl_shift_c() -> Result<(), String> {
-    let inputs = [
-        keyboard_input(VK_CONTROL.0 as u16, false),
-        keyboard_input(VK_SHIFT.0 as u16, false),
-        keyboard_input(b'C' as u16, false),
-        keyboard_input(b'C' as u16, true),
-        keyboard_input(VK_SHIFT.0 as u16, true),
-        keyboard_input(VK_CONTROL.0 as u16, true),
-    ];
-
-    let sent = unsafe { SendInput(&inputs, size_of::<INPUT>() as i32) };
-    if sent != inputs.len() as u32 {
-        return Err("Failed to synthesize Ctrl+Shift+C from the focused selection.".to_string());
-    }
-
-    Ok(())
-}
-
-fn send_paste_chord(chord: PasteChord) -> Result<(), String> {
-    match chord {
-        PasteChord::CtrlV => send_ctrl_v(),
-        PasteChord::CtrlShiftV => send_ctrl_shift_v(),
-    }
-}
-
-fn send_copy_chord(chord: CopyChord) -> Result<(), String> {
-    match chord {
-        CopyChord::CtrlC => send_ctrl_c(),
-        CopyChord::CtrlShiftC => send_ctrl_shift_c(),
-    }
-}
-
 fn capture_selection(
     active_window: &ActiveWindowSnapshot,
     log_dir: &Path,
@@ -2156,146 +2262,90 @@ fn capture_selection(
     wait_for_hotkey_modifiers_to_release();
     thread::sleep(Duration::from_millis(50));
 
-    let is_terminal = looks_like_terminal_window(active_window);
+    let strategy = resolve_input_strategy(active_window);
     let original_clipboard = read_clipboard_text().unwrap_or_default();
-    let candidates = capture_chord_candidates(active_window);
 
     let _ = append_native_log(
         log_dir,
         &format!(
-            "CAPTURE START process='{}' title='{}' chords={} terminal={} original_clipboard_len={}",
+            "CAPTURE START process='{}' title='{}' strategy={} chords={} original_clipboard_len={}",
             active_window.process_name,
             active_window.title.chars().take(80).collect::<String>(),
-            candidates
-                .iter()
-                .map(|chord| copy_chord_label(*chord))
-                .collect::<Vec<_>>()
-                .join(" -> "),
-            is_terminal,
+            strategy.name,
+            format_chord_attempts(strategy.copy_attempts),
             original_clipboard.len(),
         ),
     );
 
     let mut last_error = None;
-    for (attempt_index, chord) in candidates.iter().enumerate() {
-        if attempt_index > 0 {
-            let _ = write_clipboard_text(&original_clipboard);
-            thread::sleep(Duration::from_millis(50));
-        }
-
+    for chord in strategy.copy_attempts {
         let sequence_before = unsafe { GetClipboardSequenceNumber() };
-        let chord_label = copy_chord_label(*chord);
+        let mut clipboard_changed = false;
         let _ = append_native_log(
             log_dir,
             &format!(
-                "CAPTURE TRY chord={} seq_before={}",
-                chord_label, sequence_before,
+                "CAPTURE ATTEMPT chord={} seq_before={}",
+                chord.label(),
+                sequence_before
             ),
         );
 
-        if let Err(error) = send_copy_chord(*chord) {
-            let _ = append_native_log(
-                log_dir,
-                &format!("CAPTURE SEND FAILED chord={chord_label}: {error}"),
-            );
-            last_error = Some(error);
-            continue;
-        }
+        chord.send()?;
 
-        let mut clipboard_changed = false;
         for i in 0..40 {
             thread::sleep(Duration::from_millis(25));
             let sequence_after = unsafe { GetClipboardSequenceNumber() };
-            if sequence_after != sequence_before {
-                clipboard_changed = true;
+            if sequence_after == sequence_before {
+                continue;
+            }
+            clipboard_changed = true;
+
+            let clipboard_text = read_clipboard_text()?;
+            if clipboard_text.trim().is_empty() {
+                last_error = Some(format!(
+                    "{} changed the clipboard after {}ms, but the captured text was empty.",
+                    chord.label(),
+                    (i + 1) * 25
+                ));
                 let _ = append_native_log(
                     log_dir,
                     &format!(
-                        "CAPTURE clipboard changed after {}ms with {} (seq {} -> {})",
-                        (i + 1) * 25,
-                        chord_label,
-                        sequence_before,
-                        sequence_after,
+                        "CAPTURE RETRY chord={} seq_after={} reason=empty-text",
+                        chord.label(),
+                        sequence_after
                     ),
                 );
                 break;
             }
+
+            let _ = append_native_log(
+                log_dir,
+                &format!(
+                    "CAPTURE OK chord={} seq {} -> {} text_len={}",
+                    chord.label(),
+                    sequence_before,
+                    sequence_after,
+                    clipboard_text.len()
+                ),
+            );
+            return Ok(clipboard_text);
         }
 
-        let clipboard_text = if clipboard_changed {
-            read_clipboard_text()?
-        } else {
-            String::new()
-        };
-
-        match validate_captured_selection(
-            clipboard_changed,
-            &clipboard_text,
-            chord_label,
-            &active_window.process_name,
-        ) {
-            Ok(_) => {
-                if clipboard_text == original_clipboard {
-                    let _ = append_native_log(
-                        log_dir,
-                        "CAPTURE NOTE copied text matches the previous clipboard value but sequence advanced.",
-                    );
-                }
-
-                let _ = append_native_log(
-                    log_dir,
-                    &format!(
-                        "CAPTURE OK chord={} new_text_len={}",
-                        chord_label,
-                        clipboard_text.len(),
-                    ),
-                );
-                return Ok(clipboard_text);
-            }
-            Err(message) => {
-                let _ = append_native_log(
-                    log_dir,
-                    &format!("CAPTURE TRY FAILED chord={}: {}", chord_label, message,),
-                );
-                last_error = Some(message);
-            }
+        if !clipboard_changed {
+            last_error = Some(format!(
+                "Clipboard did not change after {} in {}.",
+                chord.label(),
+                active_window.process_name,
+            ));
         }
     }
 
     let _ = write_clipboard_text(&original_clipboard);
-    let message = last_error.unwrap_or_else(|| {
-        format!(
-            "Clipboard did not change after {}. {} was left unchanged.",
-            candidates
-                .iter()
-                .map(|chord| copy_chord_label(*chord))
-                .collect::<Vec<_>>()
-                .join(" or "),
-            active_window.process_name,
-        )
+    let msg = last_error.unwrap_or_else(|| {
+        "Capture failed without a clipboard change. Slot was left unchanged.".to_string()
     });
-    let _ = append_native_log(log_dir, &format!("CAPTURE FAILED: {}", message));
-    Err(message)
-}
-
-fn validate_captured_selection(
-    clipboard_changed: bool,
-    clipboard_text: &str,
-    copy_chord: &str,
-    process_name: &str,
-) -> Result<(), String> {
-    if !clipboard_changed {
-        return Err(format!(
-            "Clipboard did not change after {}. {} was left unchanged.",
-            copy_chord, process_name,
-        ));
-    }
-
-    if clipboard_text.trim().is_empty() {
-        return Err("Captured clipboard text was empty. Slot was left unchanged.".to_string());
-    }
-
-    Ok(())
+    let _ = append_native_log(log_dir, &format!("CAPTURE FAILED: {}", msg));
+    Err(msg)
 }
 
 fn keyboard_input(virtual_key: u16, key_up: bool) -> INPUT {
@@ -2315,44 +2365,6 @@ fn keyboard_input(virtual_key: u16, key_up: bool) -> INPUT {
             },
         },
     }
-}
-
-fn to_alias_binding(binding: &str) -> Option<String> {
-    let suffix = binding.split('+').last()?;
-    let prefix = &binding[..binding.len() - suffix.len()];
-
-    let numpad_to_digit: &[(&str, &str)] = &[
-        ("Numpad0", "0"),
-        ("Numpad1", "1"),
-        ("Numpad2", "2"),
-        ("Numpad3", "3"),
-        ("Numpad4", "4"),
-        ("Numpad5", "5"),
-        ("Numpad6", "6"),
-        ("Numpad7", "7"),
-        ("Numpad8", "8"),
-        ("Numpad9", "9"),
-    ];
-    let digit_to_numpad: &[(&str, &str)] = &[
-        ("0", "Numpad0"),
-        ("1", "Numpad1"),
-        ("2", "Numpad2"),
-        ("3", "Numpad3"),
-        ("4", "Numpad4"),
-        ("5", "Numpad5"),
-        ("6", "Numpad6"),
-        ("7", "Numpad7"),
-        ("8", "Numpad8"),
-        ("9", "Numpad9"),
-    ];
-
-    if let Some((_, digit)) = numpad_to_digit.iter().find(|(np, _)| *np == suffix) {
-        return Some(format!("{prefix}{digit}"));
-    }
-    if let Some((_, numpad)) = digit_to_numpad.iter().find(|(d, _)| *d == suffix) {
-        return Some(format!("{prefix}{numpad}"));
-    }
-    None
 }
 
 fn looks_like_terminal_window(active_window: &ActiveWindowSnapshot) -> bool {
@@ -2577,24 +2589,46 @@ mod tests {
     }
 
     #[test]
-    fn default_hotkeys_use_valid_numpad_bindings() {
-        let defaults = default_hotkeys();
-        assert_eq!(defaults.bank_a_paste[0], "Ctrl+Numpad1");
-        assert_eq!(defaults.bank_a_paste[9], "Ctrl+Numpad0");
-        assert_eq!(defaults.bank_b_paste[0], "Ctrl+Alt+Numpad1");
-        assert_eq!(defaults.bank_a_save_clipboard[0], "Ctrl+Shift+Numpad1");
-        assert_eq!(defaults.bank_b_save_clipboard[0], "Ctrl+Alt+Shift+Numpad1");
+    fn default_hotkeys_match_the_shared_canonical_json() {
+        let shared_defaults: HotkeyMapping =
+            serde_json::from_str(HOTKEY_DEFAULTS_JSON).expect("parse shared defaults");
+
+        assert_eq!(default_hotkeys().bank_a_paste, shared_defaults.bank_a_paste);
+        assert_eq!(default_hotkeys().bank_b_paste, shared_defaults.bank_b_paste);
+        assert_eq!(
+            default_hotkeys().bank_a_save_clipboard,
+            shared_defaults.bank_a_save_clipboard
+        );
+        assert_eq!(
+            default_hotkeys().bank_b_save_clipboard,
+            shared_defaults.bank_b_save_clipboard
+        );
+        assert_eq!(
+            default_hotkeys().finalize_combo,
+            shared_defaults.finalize_combo
+        );
+        assert_eq!(default_hotkeys().cancel_combo, shared_defaults.cancel_combo);
+        assert_eq!(
+            default_hotkeys().replay_last_combo,
+            shared_defaults.replay_last_combo
+        );
+        assert_eq!(
+            default_hotkeys().toggle_window,
+            shared_defaults.toggle_window
+        );
+        assert_eq!(default_hotkeys().panic_toggle, shared_defaults.panic_toggle);
     }
 
     #[test]
-    fn migrate_hotkeys_repairs_malformed_double_numpad_bindings() {
-        let malformed = HotkeyMapping {
+    fn migrate_hotkeys_repairs_malformed_rust_defaults() {
+        let defaults = default_hotkeys();
+        let legacy = HotkeyMapping {
             bank_a_paste: build_slot_hotkeys("Ctrl+Numpad", &NUMPAD_DIGITS_STANDARD),
-            bank_b_paste: build_slot_hotkeys("Ctrl+Alt+Numpad", &NUMPAD_DIGITS_STANDARD),
+            bank_b_paste: build_slot_hotkeys("Ctrl+Alt+Numpad", &NUMPAD_DIGITS_ZERO_FIRST),
             bank_a_save_clipboard: build_slot_hotkeys("Ctrl+Shift+Numpad", &NUMPAD_DIGITS_STANDARD),
             bank_b_save_clipboard: build_slot_hotkeys(
                 "Ctrl+Alt+Shift+Numpad",
-                &NUMPAD_DIGITS_STANDARD,
+                &NUMPAD_DIGITS_ZERO_FIRST,
             ),
             finalize_combo: "Ctrl+NumpadEnter".to_string(),
             cancel_combo: "Ctrl+NumpadDecimal".to_string(),
@@ -2604,8 +2638,7 @@ mod tests {
             extra: HashMap::new(),
         };
 
-        let (migrated, changed) = migrate_hotkeys_if_needed(&malformed);
-        let defaults = default_hotkeys();
+        let (migrated, changed) = migrate_hotkeys_if_needed(&legacy);
 
         assert!(changed);
         assert_eq!(migrated.bank_a_paste, defaults.bank_a_paste);
@@ -2618,140 +2651,6 @@ mod tests {
             migrated.bank_b_save_clipboard,
             defaults.bank_b_save_clipboard
         );
-    }
-
-    #[test]
-    fn validate_captured_selection_allows_same_text_when_clipboard_sequence_changed() {
-        let result = validate_captured_selection(true, "same text", "Ctrl+C", "code.exe");
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn validate_captured_selection_requires_clipboard_change() {
-        let result = validate_captured_selection(false, "captured", "Ctrl+C", "code.exe");
-        assert_eq!(
-            result.unwrap_err(),
-            "Clipboard did not change after Ctrl+C. code.exe was left unchanged."
-        );
-    }
-
-    #[test]
-    fn validate_captured_selection_rejects_empty_text() {
-        let result = validate_captured_selection(true, "   ", "Ctrl+C", "code.exe");
-        assert_eq!(
-            result.unwrap_err(),
-            "Captured clipboard text was empty. Slot was left unchanged."
-        );
-    }
-
-    #[test]
-    fn materialize_profile_breaks_circular_inheritance_without_recursing_forever() {
-        let mut documents = default_documents();
-        let global_profile = documents.profiles_document.profiles[0].clone();
-
-        let mut cycle_a = global_profile.clone();
-        cycle_a.id = "cycle-a".to_string();
-        cycle_a.name = "Cycle A".to_string();
-        cycle_a.kind = "workspace".to_string();
-        cycle_a.extends_profile_id = Some("cycle-b".to_string());
-        cycle_a.match_rules = vec![];
-
-        let mut cycle_b = global_profile.clone();
-        cycle_b.id = "cycle-b".to_string();
-        cycle_b.name = "Cycle B".to_string();
-        cycle_b.kind = "workspace".to_string();
-        cycle_b.extends_profile_id = Some("cycle-a".to_string());
-        cycle_b.match_rules = vec![];
-
-        documents.profiles_document.profiles = vec![global_profile, cycle_a, cycle_b];
-        let settings = AppSettings {
-            active_profile_id_override: Some("cycle-a".to_string()),
-            ..documents.settings_document.settings.clone()
-        };
-
-        let resolved = resolve_profile(
-            &documents.profiles_document.profiles,
-            &settings,
-            &ActiveWindowSnapshot::default(),
-        )
-        .expect("circular inheritance should not crash resolution");
-
-        assert_eq!(resolved.profile.id, "cycle-a");
-        assert_eq!(resolved.effective_bank_a.slots.len(), 10);
-        assert_eq!(resolved.effective_bank_b.slots.len(), 10);
-    }
-
-    #[test]
-    fn materialize_profile_prefers_child_super_when_ids_match() {
-        let mut documents = default_documents();
-
-        let global = documents
-            .profiles_document
-            .profiles
-            .iter_mut()
-            .find(|profile| profile.id == "global-workflow")
-            .expect("global profile");
-        global.supers = vec![SuperRecipe {
-            id: "shared-super".to_string(),
-            name: "Parent shared super".to_string(),
-            description: "".to_string(),
-            steps: vec![RecipeStep::Slot {
-                slot_ref: SlotReference {
-                    bank_id: "A".to_string(),
-                    slot_index: 0,
-                },
-            }],
-            sequence: vec![],
-            apply_stances: true,
-            hotkey_hint: None,
-            assembly: None,
-            extra: HashMap::new(),
-        }];
-
-        let workspace = documents
-            .profiles_document
-            .profiles
-            .iter_mut()
-            .find(|profile| profile.id == "therxspot")
-            .expect("workspace profile");
-        workspace.supers = vec![SuperRecipe {
-            id: "shared-super".to_string(),
-            name: "Workspace shared super".to_string(),
-            description: "".to_string(),
-            steps: vec![RecipeStep::Slot {
-                slot_ref: SlotReference {
-                    bank_id: "A".to_string(),
-                    slot_index: 1,
-                },
-            }],
-            sequence: vec![],
-            apply_stances: true,
-            hotkey_hint: None,
-            assembly: None,
-            extra: HashMap::new(),
-        }];
-
-        let resolved = resolve_profile(
-            &documents.profiles_document.profiles,
-            &documents.settings_document.settings,
-            &ActiveWindowSnapshot {
-                title: "VS Code - TheRxSpot.com".to_string(),
-                process_name: "code.exe".to_string(),
-                process_path: "C:/Program Files/Microsoft VS Code/Code.exe".to_string(),
-                workspace_path: "C:/Users/93rob/Documents/GitHub/TheRxSpot.com".to_string(),
-            },
-        )
-        .expect("profile resolution");
-
-        let shared_supers: Vec<&SuperRecipe> = resolved
-            .profile
-            .supers
-            .iter()
-            .filter(|recipe| recipe.id == "shared-super")
-            .collect();
-
-        assert_eq!(shared_supers.len(), 1);
-        assert_eq!(shared_supers[0].name, "Workspace shared super");
     }
 
     #[test]
@@ -2782,48 +2681,96 @@ mod tests {
     }
 
     #[test]
-    fn terminal_windows_prefer_shift_modified_clipboard_chords() {
+    fn resolve_input_strategy_prefers_terminal_copy_and_paste_for_terminals() {
         let terminal_window = ActiveWindowSnapshot {
-            title: "WezTerm".to_string(),
-            process_name: "wezterm-gui.exe".to_string(),
+            title: "Opencode".to_string(),
+            process_name: "opencode.exe".to_string(),
             process_path: String::new(),
             workspace_path: String::new(),
         };
         let editor_window = ActiveWindowSnapshot {
-            title: "main.ts - Visual Studio Code".to_string(),
+            title: "my_file.ts - Visual Studio Code".to_string(),
             process_name: "code.exe".to_string(),
             process_path: String::new(),
             workspace_path: String::new(),
         };
 
+        let terminal_strategy = resolve_input_strategy(&terminal_window);
+        let editor_strategy = resolve_input_strategy(&editor_window);
+
+        assert_eq!(terminal_strategy.name, "terminal-ctrl-shift");
         assert_eq!(
-            paste_chord_for_window(&terminal_window),
-            PasteChord::CtrlShiftV
+            format_chord_attempts(terminal_strategy.copy_attempts),
+            "Ctrl+Shift+C -> Ctrl+C"
         );
         assert_eq!(
-            capture_chord_candidates(&terminal_window),
-            vec![CopyChord::CtrlShiftC, CopyChord::CtrlC]
+            format_chord_attempts(terminal_strategy.paste_attempts),
+            "Ctrl+Shift+V -> Ctrl+V"
         );
-        assert_eq!(paste_chord_for_window(&editor_window), PasteChord::CtrlV);
+        assert_eq!(editor_strategy.name, "standard-ctrl");
         assert_eq!(
-            capture_chord_candidates(&editor_window),
-            vec![CopyChord::CtrlC, CopyChord::CtrlShiftC]
+            format_chord_attempts(editor_strategy.copy_attempts),
+            "Ctrl+C"
+        );
+        assert_eq!(
+            format_chord_attempts(editor_strategy.paste_attempts),
+            "Ctrl+V"
         );
     }
 
     #[test]
-    fn to_alias_binding_bijects_numpad_and_digits() {
-        assert_eq!(to_alias_binding("Ctrl+Numpad1"), Some("Ctrl+1".to_string()));
-        assert_eq!(to_alias_binding("Ctrl+1"), Some("Ctrl+Numpad1".to_string()));
-        assert_eq!(
-            to_alias_binding("Ctrl+Shift+Numpad5"),
-            Some("Ctrl+Shift+5".to_string())
-        );
-        assert_eq!(
-            to_alias_binding("Ctrl+Shift+5"),
-            Some("Ctrl+Shift+Numpad5".to_string())
-        );
-        assert_eq!(to_alias_binding("Ctrl+Pause"), None);
+    fn bank_a_target_profile_prefers_override_then_editor_hint_then_resolved() {
+        let mut documents = default_documents();
+        documents
+            .settings_document
+            .settings
+            .active_profile_id_override = Some("therxspot".to_string());
+        let resolved = ResolvedProfile {
+            profile: documents.profiles_document.profiles[0].clone(),
+            effective_bank_a: documents.profiles_document.profiles[0].bank_a.clone(),
+            effective_bank_b: documents.profiles_document.profiles[0].bank_b.clone(),
+            reason: "resolved".to_string(),
+            score: 10,
+        };
+
+        let picked_from_override =
+            select_bank_a_target_profile_id(&documents, &resolved, Some("global-workflow"));
+        assert_eq!(picked_from_override, "therxspot");
+
+        let mut no_override = documents.clone();
+        no_override
+            .settings_document
+            .settings
+            .active_profile_id_override = None;
+
+        let picked_from_editor =
+            select_bank_a_target_profile_id(&no_override, &resolved, Some("global-workflow"));
+        assert_eq!(picked_from_editor, "global-workflow");
+
+        let picked_from_resolved =
+            select_bank_a_target_profile_id(&no_override, &resolved, Some("missing-profile"));
+        assert_eq!(picked_from_resolved, resolved.profile.id);
+    }
+
+    #[test]
+    fn hotkey_bindings_include_direct_slots_and_runtime_controls() {
+        let defaults = default_documents().settings_document.settings;
+        let bindings = hotkey_bindings_from_settings(&defaults);
+        let binding_labels = bindings
+            .iter()
+            .map(|(binding, _)| binding.clone())
+            .collect::<Vec<_>>();
+
+        assert_eq!(bindings.len(), 45);
+        assert!(binding_labels.contains(&"Ctrl+Numpad1".to_string()));
+        assert!(binding_labels.contains(&"Ctrl+Alt+Numpad0".to_string()));
+        assert!(binding_labels.contains(&"Ctrl+Shift+Numpad5".to_string()));
+        assert!(binding_labels.contains(&"Ctrl+Alt+Shift+Numpad6".to_string()));
+        assert!(binding_labels.contains(&"Ctrl+NumpadEnter".to_string()));
+        assert!(binding_labels.contains(&"Ctrl+NumpadDecimal".to_string()));
+        assert!(binding_labels.contains(&"Ctrl+NumpadAdd".to_string()));
+        assert!(binding_labels.contains(&"Ctrl+NumpadSubtract".to_string()));
+        assert!(binding_labels.contains(&"Ctrl+Pause".to_string()));
     }
 
     #[test]

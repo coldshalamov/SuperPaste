@@ -19,6 +19,29 @@ export type NativeRuntimeSnapshot = {
   activeWindow: ActiveWindowSnapshot;
   nativePasteReady: boolean;
   panicModeEnabled: boolean;
+  degradedMode: boolean;
+  registeredBindingCount: number;
+  failedBindingCount: number;
+  activeProfileOverrideId?: string | null;
+  lastEditorProfileId?: string | null;
+  resolvedProfileId: string;
+  resolvedProfileReason: string;
+};
+
+export type NativeDiagnosticsSnapshot = {
+  appDataDir: string;
+  lastStatusMessage: string;
+  activeWindow: ActiveWindowSnapshot;
+  hotkeySummary: string;
+  degradedMode: boolean;
+  currentHotkeys: Record<string, unknown>;
+  registeredBindings: string[];
+  failedBindings: string[];
+  activeProfileOverrideId?: string | null;
+  lastEditorProfileId?: string | null;
+  resolvedProfileId: string;
+  resolvedProfileReason: string;
+  recentLogEntries: string[];
 };
 
 export type NativeStatusPayload = {
@@ -29,13 +52,13 @@ export type NativeStatusPayload = {
 
 export type AppCommandPayload = {
   action:
+    | "paste-combo"
+    | "cancel-combo"
+    | "replay-last-combo"
     | "show-dock"
     | "show-editor"
     | "toggle-hotkeys"
     | "switch-profile"
-    | "paste-combo"
-    | "clear-combo"
-    | "replay-combo"
     | "queue-slot";
   profileId?: string | null;
   bankId?: "A" | "B" | null;
@@ -73,6 +96,10 @@ export async function getNativeRuntimeSnapshot() {
   return invoke<NativeRuntimeSnapshot>("get_native_runtime_snapshot");
 }
 
+export async function getNativeDiagnosticsSnapshot() {
+  return invoke<NativeDiagnosticsSnapshot>("get_native_diagnostics_snapshot");
+}
+
 export async function getNativeActiveWindowSnapshot() {
   return invoke<ActiveWindowSnapshot>("get_active_window_snapshot");
 }
@@ -87,6 +114,10 @@ export async function writeSystemClipboardText(text: string) {
 
 export async function executeNativePastePlan(plan: NativePastePlan) {
   return invoke<NativePasteResult>("execute_native_paste_plan", { plan });
+}
+
+export async function setNativeEditorProfileHint(profileId: string | null) {
+  return invoke<void>("set_editor_profile_hint", { profileId });
 }
 
 export async function openNativeTestHarnessWindow() {

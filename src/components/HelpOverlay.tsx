@@ -100,7 +100,7 @@ function HotkeysTab({ settings }: { settings: AppSettings }) {
       </div>
 
       <p className="text-[0.65rem] text-[var(--color-text-faint)] mt-2">
-        Numpad mirrors number row slots. Customize in Editor &gt; Hotkeys.
+        Numpad bindings are the canonical defaults. Add top-row aliases manually in Editor &gt; Hotkeys if you want them.
       </p>
     </div>
   );
@@ -110,7 +110,7 @@ function TipsTab() {
   const tips = [
     {
       title: "Save fast",
-      text: "Highlight text, press Ctrl+Shift+1..0 to bank it. SuperPaste copies for you.",
+      text: "Highlight text, press Ctrl+Shift+Numpad1..0 to bank it. SuperPaste copies for you.",
     },
     {
       title: "Clipboard preserved",
@@ -122,11 +122,11 @@ function TipsTab() {
     },
     {
       title: "Profile auto-switch",
-      text: "Profiles switch based on active window and workspace. Bank A adapts per-repo.",
+      text: "Profiles switch from active window signals plus your current editor/manual override. Bank A adapts per-repo when the host gives SuperPaste enough context.",
     },
     {
       title: "Replay",
-      text: "Alt+/ re-fires the last finalized combo for iterative refinement.",
+      text: "Ctrl+NumpadAdd re-fires the last finalized combo for iterative refinement.",
     },
   ];
 

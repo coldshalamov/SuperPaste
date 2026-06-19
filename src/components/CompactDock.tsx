@@ -208,7 +208,7 @@ function BankSection({
           </div>
         </div>
         <span className="text-[0.6rem] text-[var(--color-text-faint)] font-mono">
-          {isBankA ? "Ctrl+Num1..0" : "Ctrl+Alt+Num1..0"}
+          {isBankA ? "Ctrl+Numpad1..0" : "Ctrl+Alt+Numpad1..0"}
         </span>
       </div>
 

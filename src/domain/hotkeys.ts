@@ -1,3 +1,4 @@
+import sharedHotkeyDefaults from "../shared/hotkey-defaults.json";
 import { HotkeyConflict, SLOT_DIGITS } from "./models";
 
 export type HotkeyMapping = ReturnType<typeof createDefaultHotkeys>;
@@ -28,14 +29,16 @@ const LEGACY_NUMPAD_BANK_A_PASTE = buildDefaultSlotHotkeys("Ctrl+Numpad");
 const LEGACY_NUMPAD_BANK_B_PASTE = buildDefaultSlotHotkeys("Ctrl+Alt+Numpad");
 const LEGACY_NUMPAD_BANK_A_SAVE = buildDefaultSlotHotkeys("Ctrl+Shift+Numpad");
 const LEGACY_NUMPAD_BANK_B_SAVE = buildDefaultSlotHotkeys("Ctrl+Alt+Shift+Numpad");
+const LEGACY_BROKEN_BANK_A_PASTE = buildNumpadSlotHotkeys("Ctrl+Numpad");
+const LEGACY_BROKEN_BANK_B_PASTE = buildNumpadSlotHotkeys("Ctrl+Alt+Numpad");
+const LEGACY_BROKEN_BANK_A_SAVE = buildNumpadSlotHotkeys("Ctrl+Shift+Numpad");
+const LEGACY_BROKEN_BANK_B_SAVE = buildNumpadSlotHotkeys("Ctrl+Alt+Shift+Numpad");
+const LEGACY_BROKEN_ZERO_FIRST_BANK_B_PASTE = buildZeroFirstSlotHotkeys("Ctrl+Alt+NumpadNumpad");
+const LEGACY_BROKEN_ZERO_FIRST_BANK_B_SAVE = buildZeroFirstSlotHotkeys("Ctrl+Alt+Shift+NumpadNumpad");
 const LEGACY_ZERO_FIRST_BANK_A_PASTE = buildZeroFirstSlotHotkeys("Ctrl+Numpad");
 const LEGACY_ZERO_FIRST_BANK_B_PASTE = buildZeroFirstSlotHotkeys("Ctrl+Alt+Numpad");
 const LEGACY_ZERO_FIRST_BANK_A_SAVE = buildZeroFirstSlotHotkeys("Ctrl+Shift+Numpad");
 const LEGACY_ZERO_FIRST_BANK_B_SAVE = buildZeroFirstSlotHotkeys("Ctrl+Alt+Shift+Numpad");
-const DEFAULT_BANK_A_PASTE = buildNumpadSlotHotkeys("Ctrl+");
-const DEFAULT_BANK_B_PASTE = buildNumpadSlotHotkeys("Ctrl+Alt+");
-const DEFAULT_BANK_A_SAVE = buildNumpadSlotHotkeys("Ctrl+Shift+");
-const DEFAULT_BANK_B_SAVE = buildNumpadSlotHotkeys("Ctrl+Alt+Shift+");
 
 const LEGACY_RUNTIME_COMBOS = {
   finalizeCombo: "Alt+Enter",
@@ -46,17 +49,7 @@ const LEGACY_RUNTIME_COMBOS = {
 } as const;
 
 export function createDefaultHotkeys() {
-  return {
-    bankAPaste: [...DEFAULT_BANK_A_PASTE],
-    bankBPaste: [...DEFAULT_BANK_B_PASTE],
-    bankASaveClipboard: [...DEFAULT_BANK_A_SAVE],
-    bankBSaveClipboard: [...DEFAULT_BANK_B_SAVE],
-    finalizeCombo: "Ctrl+NumpadEnter",
-    cancelCombo: "Ctrl+NumpadDecimal",
-    replayLastCombo: "Ctrl+NumpadAdd",
-    toggleWindow: "Ctrl+NumpadSubtract",
-    panicToggle: "Ctrl+Pause",
-  };
+  return structuredClone(sharedHotkeyDefaults);
 }
 
 function arraysEqual(a: string[], b: string[]) {
@@ -95,10 +88,11 @@ export function migrateHotkeysIfNeeded(hotkeys: HotkeyMapping): { hotkeys: Hotke
       LEGACY_BANK_A_PASTE,
       LEGACY_CTRL_BANK_A_PASTE,
       LEGACY_NUMPAD_BANK_A_PASTE,
+      LEGACY_BROKEN_BANK_A_PASTE,
       LEGACY_ZERO_FIRST_BANK_A_PASTE,
     ])
   ) {
-    nextHotkeys.bankAPaste = [...DEFAULT_BANK_A_PASTE];
+    nextHotkeys.bankAPaste = [...defaults.bankAPaste];
     migrated = true;
   }
 
@@ -106,10 +100,12 @@ export function migrateHotkeysIfNeeded(hotkeys: HotkeyMapping): { hotkeys: Hotke
     matchesAnyPattern(hotkeys.bankBPaste, [
       LEGACY_CTRL_BANK_B_PASTE,
       LEGACY_NUMPAD_BANK_B_PASTE,
+      LEGACY_BROKEN_BANK_B_PASTE,
+      LEGACY_BROKEN_ZERO_FIRST_BANK_B_PASTE,
       LEGACY_ZERO_FIRST_BANK_B_PASTE,
     ])
   ) {
-    nextHotkeys.bankBPaste = [...DEFAULT_BANK_B_PASTE];
+    nextHotkeys.bankBPaste = [...defaults.bankBPaste];
     migrated = true;
   }
 
@@ -118,10 +114,11 @@ export function migrateHotkeysIfNeeded(hotkeys: HotkeyMapping): { hotkeys: Hotke
       LEGACY_BANK_A_SAVE,
       LEGACY_CTRL_BANK_A_SAVE,
       LEGACY_NUMPAD_BANK_A_SAVE,
+      LEGACY_BROKEN_BANK_A_SAVE,
       LEGACY_ZERO_FIRST_BANK_A_SAVE,
     ])
   ) {
-    nextHotkeys.bankASaveClipboard = [...DEFAULT_BANK_A_SAVE];
+    nextHotkeys.bankASaveClipboard = [...defaults.bankASaveClipboard];
     migrated = true;
   }
 
@@ -129,10 +126,12 @@ export function migrateHotkeysIfNeeded(hotkeys: HotkeyMapping): { hotkeys: Hotke
     matchesAnyPattern(hotkeys.bankBSaveClipboard, [
       LEGACY_CTRL_BANK_B_SAVE,
       LEGACY_NUMPAD_BANK_B_SAVE,
+      LEGACY_BROKEN_BANK_B_SAVE,
+      LEGACY_BROKEN_ZERO_FIRST_BANK_B_SAVE,
       LEGACY_ZERO_FIRST_BANK_B_SAVE,
     ])
   ) {
-    nextHotkeys.bankBSaveClipboard = [...DEFAULT_BANK_B_SAVE];
+    nextHotkeys.bankBSaveClipboard = [...defaults.bankBSaveClipboard];
     migrated = true;
   }
 

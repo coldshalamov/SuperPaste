@@ -4,6 +4,7 @@ import {
   detectHotkeyConflicts,
   migrateHotkeysIfNeeded,
 } from "../hotkeys";
+import sharedHotkeyDefaults from "../../shared/hotkey-defaults.json";
 
 describe("detectHotkeyConflicts", () => {
   it("flags duplicate bindings across hotkey scopes", () => {
@@ -41,6 +42,10 @@ describe("detectHotkeyConflicts", () => {
 });
 
 describe("createDefaultHotkeys", () => {
+  it("stays in parity with the shared canonical defaults", () => {
+    expect(createDefaultHotkeys()).toEqual(sharedHotkeyDefaults);
+  });
+
   it("uses numpad keys as default slot bindings", () => {
     const defaults = createDefaultHotkeys();
 
@@ -114,6 +119,63 @@ describe("migrateHotkeysIfNeeded", () => {
     expect(migrated.hotkeys.bankBPaste).toEqual(defaults.bankBPaste);
     expect(migrated.hotkeys.bankASaveClipboard).toEqual(defaults.bankASaveClipboard);
     expect(migrated.hotkeys.bankBSaveClipboard).toEqual(defaults.bankBSaveClipboard);
+  });
+
+  it("migrates malformed native numpad strings back to canonical defaults", () => {
+    const legacy = createDefaultHotkeys();
+    legacy.bankAPaste = [
+      "Ctrl+NumpadNumpad1",
+      "Ctrl+NumpadNumpad2",
+      "Ctrl+NumpadNumpad3",
+      "Ctrl+NumpadNumpad4",
+      "Ctrl+NumpadNumpad5",
+      "Ctrl+NumpadNumpad6",
+      "Ctrl+NumpadNumpad7",
+      "Ctrl+NumpadNumpad8",
+      "Ctrl+NumpadNumpad9",
+      "Ctrl+NumpadNumpad0",
+    ];
+    legacy.bankBPaste = [
+      "Ctrl+Alt+NumpadNumpad0",
+      "Ctrl+Alt+NumpadNumpad1",
+      "Ctrl+Alt+NumpadNumpad2",
+      "Ctrl+Alt+NumpadNumpad3",
+      "Ctrl+Alt+NumpadNumpad4",
+      "Ctrl+Alt+NumpadNumpad5",
+      "Ctrl+Alt+NumpadNumpad6",
+      "Ctrl+Alt+NumpadNumpad7",
+      "Ctrl+Alt+NumpadNumpad8",
+      "Ctrl+Alt+NumpadNumpad9",
+    ];
+    legacy.bankASaveClipboard = [
+      "Ctrl+Shift+NumpadNumpad1",
+      "Ctrl+Shift+NumpadNumpad2",
+      "Ctrl+Shift+NumpadNumpad3",
+      "Ctrl+Shift+NumpadNumpad4",
+      "Ctrl+Shift+NumpadNumpad5",
+      "Ctrl+Shift+NumpadNumpad6",
+      "Ctrl+Shift+NumpadNumpad7",
+      "Ctrl+Shift+NumpadNumpad8",
+      "Ctrl+Shift+NumpadNumpad9",
+      "Ctrl+Shift+NumpadNumpad0",
+    ];
+    legacy.bankBSaveClipboard = [
+      "Ctrl+Alt+Shift+NumpadNumpad0",
+      "Ctrl+Alt+Shift+NumpadNumpad1",
+      "Ctrl+Alt+Shift+NumpadNumpad2",
+      "Ctrl+Alt+Shift+NumpadNumpad3",
+      "Ctrl+Alt+Shift+NumpadNumpad4",
+      "Ctrl+Alt+Shift+NumpadNumpad5",
+      "Ctrl+Alt+Shift+NumpadNumpad6",
+      "Ctrl+Alt+Shift+NumpadNumpad7",
+      "Ctrl+Alt+Shift+NumpadNumpad8",
+      "Ctrl+Alt+Shift+NumpadNumpad9",
+    ];
+
+    const migrated = migrateHotkeysIfNeeded(legacy);
+
+    expect(migrated.migrated).toBe(true);
+    expect(migrated.hotkeys).toEqual(createDefaultHotkeys());
   });
 
   it("migrates legacy Alt-based runtime combos to numpad combos", () => {

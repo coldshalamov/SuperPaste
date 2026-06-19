@@ -31,15 +31,15 @@ That split is the whole point. You do not want twenty random clips. You want a l
 
 ## Hotkey model
 
-Default hotkeys (numpad-primary, top-row digits also work):
+Default hotkeys (numpad-only by default):
 - `Ctrl+Numpad1..0` paste Bank A slots
 - `Ctrl+Alt+Numpad1..0` paste Bank B slots
 - `Ctrl+Shift+Numpad1..0` capture the focused selection into Bank A slots
 - `Ctrl+Alt+Shift+Numpad1..0` capture the focused selection into Bank B slots
-- The top-row digit keys mirror the same slots, so both numpad and top-row digits work.
-- Save hotkeys synthesize the appropriate copy gesture (`Ctrl+C` for editors, `Ctrl+Shift+C` for terminals) against the focused selection, fall back to the alternate copy chord if the clipboard does not change, then store the captured text in the target slot.
+- There is no automatic top-row alias registration anymore. If you want top-row digits too, bind them explicitly in the editor.
+- Save hotkeys synthesize the appropriate copy gesture (`Ctrl+C` for editors, `Ctrl+Shift+C` first for terminal-like windows with `Ctrl+C` fallback) against the focused selection, then store the captured text in the target slot only after the clipboard sequence actually changes.
 - Captured slots auto-queue by default, so you can load several clips and discharge the assembled stack without opening the dock.
-- Paste hotkeys automatically use `Ctrl+Shift+V` in terminal-like windows (Windows Terminal, PowerShell, Opencode, WezTerm, etc.) and `Ctrl+V` everywhere else.
+- Paste hotkeys automatically prefer `Ctrl+Shift+V` in terminal-like windows (Windows Terminal, PowerShell, Opencode, WezTerm, etc.) and fall back to `Ctrl+V` when needed.
 
 Combo/runtime hotkeys:
 - `Ctrl+NumpadEnter` paste the queued combo
@@ -50,7 +50,7 @@ Combo/runtime hotkeys:
 Safety:
 - `Ctrl+Pause` panic toggle — suspends all slot hotkeys.
 - The same state is exposed through the tray menu.
-- The status bar and native bridge report degraded or conflicting bindings instead of failing silently.
+- The status bar and native bridge report degraded or conflicting bindings instead of failing silently, including native registration failures and the resolved profile reason.
 - Persisted legacy hotkey defaults (Alt-based or Ctrl+digit) are automatically migrated to the new numpad defaults on next launch. Custom bindings are never overwritten.
 
 ## What the app does
@@ -169,7 +169,7 @@ A practical first session:
 1. Launch SuperPaste.
 2. Keep Bank A focused on repo-specific context for the project in front of you.
 3. Keep Bank B focused on stable workflow moves you want across repos.
-4. Save your current repo notes into Bank A with `Ctrl+Shift+Numpad1` (or the matching top-row key).
+4. Save your current repo notes into Bank A with `Ctrl+Shift+Numpad1`.
 5. Fire a workflow move from Bank B with `Ctrl+Alt+Numpad1`.
 6. Latch a stance like `Patch only` if you want it to stay active for a while.
 7. Queue a super, then hit the combo paste hotkey to assemble and paste the whole packet into your coding agent.

@@ -28,11 +28,13 @@ import {
   createPersistencePort,
 } from "../platform/desktop-system";
 import {
+  getNativeDiagnosticsSnapshot,
   getNativeRuntimeSnapshot,
   isTauriRuntime,
   listenToAppCommand,
   listenToNativeStatus,
   openNativeTestHarnessWindow,
+  setNativeEditorProfileHint,
 } from "../platform/tauri";
 import { SuperPasteEngine } from "../core/superpaste-engine";
 
@@ -100,6 +102,14 @@ export function useSuperPasteApp() {
     storageDescription: "Loading...",
     nativeShellMode: "In-process bridge",
     nativePasteReady: false,
+    degradedMode: false,
+    registeredBindingCount: 0,
+    failedBindingCount: 0,
+    failedBindings: [] as string[],
+    activeProfileOverrideId: null as string | null,
+    lastEditorProfileId: null as string | null,
+    resolvedProfileId: "",
+    resolvedProfileReason: "",
   });
   const [activeWindow, setActiveWindow] = useState({
     title: "",
@@ -166,11 +176,22 @@ export function useSuperPasteApp() {
       return;
     }
 
-    const nativeRuntime = await getNativeRuntimeSnapshot();
+    const [nativeRuntime, diagnostics] = await Promise.all([
+      getNativeRuntimeSnapshot(),
+      getNativeDiagnosticsSnapshot(),
+    ]);
     setRuntime((current) => ({
       ...current,
       appDataDir: nativeRuntime.appDataDir,
       nativePasteReady: nativeRuntime.nativePasteReady,
+      degradedMode: nativeRuntime.degradedMode,
+      registeredBindingCount: nativeRuntime.registeredBindingCount,
+      failedBindingCount: nativeRuntime.failedBindingCount,
+      failedBindings: diagnostics.failedBindings,
+      activeProfileOverrideId: nativeRuntime.activeProfileOverrideId ?? null,
+      lastEditorProfileId: nativeRuntime.lastEditorProfileId ?? null,
+      resolvedProfileId: nativeRuntime.resolvedProfileId,
+      resolvedProfileReason: nativeRuntime.resolvedProfileReason,
     }));
     setHotkeySummary(nativeRuntime.hotkeySummary);
     setSettings((current) =>
@@ -287,6 +308,14 @@ export function useSuperPasteApp() {
           ? "Tauri UI shell + Windows native coordinator"
           : "Browser preview shell",
         nativePasteReady: isTauriRuntime(),
+        degradedMode: false,
+        registeredBindingCount: 0,
+        failedBindingCount: 0,
+        failedBindings: [],
+        activeProfileOverrideId: null,
+        lastEditorProfileId: null,
+        resolvedProfileId: "",
+        resolvedProfileReason: "",
       });
 
       await refreshNativeRuntimeState();
@@ -304,6 +333,14 @@ export function useSuperPasteApp() {
       setEditorProfileId(profiles[0].id);
     }
   }, [editorProfileId, profiles]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    void setNativeEditorProfileHint(editorProfileId).catch(() => undefined);
+  }, [editorProfileId]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -352,6 +389,15 @@ export function useSuperPasteApp() {
     let unlisten: (() => void) | undefined;
     void listenToAppCommand(async (payload) => {
       switch (payload.action) {
+        case "paste-combo":
+          await pasteCombo();
+          break;
+        case "cancel-combo":
+          await cancelCombo();
+          break;
+        case "replay-last-combo":
+          await replayLastCombo();
+          break;
         case "show-dock":
           setShellMode("dock");
           break;
@@ -369,15 +415,6 @@ export function useSuperPasteApp() {
           if (payload.profileId) {
             setEditorProfileId(payload.profileId);
           }
-          break;
-        case "paste-combo":
-          await pasteCombo();
-          break;
-        case "clear-combo":
-          await cancelCombo();
-          break;
-        case "replay-combo":
-          await replayLastCombo();
           break;
         case "queue-slot":
           if ((payload.bankId === "A" || payload.bankId === "B") && typeof payload.slotIndex === "number") {

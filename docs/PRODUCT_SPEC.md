@@ -23,12 +23,12 @@ This is a loadout architecture, not a bucket of clips.
 ## Primary interaction model
 
 Direct slot moves:
-- `Ctrl+1..0` paste Bank A
-- `Ctrl+Alt+1..0` paste Bank B
-- `Ctrl+Shift+1..0` copy the focused selection into Bank A
-- `Ctrl+Alt+Shift+1..0` copy the focused selection into Bank B
-- Matching numpad digits mirror the same Bank A and Bank B slots for paste and save.
-- Copy/save hotkeys auto-queue the captured slot by default, making repeated capture gestures build a combo stack.
+- `Ctrl+Numpad1..0` paste Bank A
+- `Ctrl+Alt+Numpad1..0` paste Bank B
+- `Ctrl+Shift+Numpad1..0` copy the focused selection into Bank A
+- `Ctrl+Alt+Shift+Numpad1..0` copy the focused selection into Bank B
+- Top-row digits are not auto-mirrored. If a user wants them, they must bind them explicitly.
+- Copy/save hotkeys auto-queue the captured slot by default when enabled, making repeated capture gestures build a combo stack.
 - Combo paste, clear, replay, dock toggle, and panic controls are native hotkeys and tray commands.
 
 Combo controls:

@@ -6,6 +6,8 @@ type StatusBarProps = {
   isManualOverride: boolean;
   hotkeyStatus: string;
   hotkeyWarnings: string[];
+  nativeFailedBindings: string[];
+  nativeResolvedProfileReason: string;
 };
 
 export function StatusBar({
@@ -14,6 +16,8 @@ export function StatusBar({
   isManualOverride,
   hotkeyStatus,
   hotkeyWarnings,
+  nativeFailedBindings,
+  nativeResolvedProfileReason,
 }: StatusBarProps) {
   return (
     <footer className="flex flex-wrap items-center gap-3 border-t border-[var(--color-border-subtle)] pt-2 text-xs text-[var(--color-text-muted)]">
@@ -47,6 +51,12 @@ export function StatusBar({
         {hotkeyStatus}
       </span>
 
+      {nativeResolvedProfileReason && (
+        <span className="truncate max-w-[260px]" title={nativeResolvedProfileReason}>
+          {nativeResolvedProfileReason}
+        </span>
+      )}
+
       {hotkeyWarnings.length > 0 && (
         <span
           className="flex items-center gap-1.5 text-[var(--color-warning)]"
@@ -54,6 +64,16 @@ export function StatusBar({
         >
           <AlertTriangle size={11} />
           {hotkeyWarnings.length} conflict{hotkeyWarnings.length > 1 ? "s" : ""}
+        </span>
+      )}
+
+      {nativeFailedBindings.length > 0 && (
+        <span
+          className="flex items-center gap-1.5 text-[var(--color-warning)]"
+          title={nativeFailedBindings.join("; ")}
+        >
+          <AlertTriangle size={11} />
+          {nativeFailedBindings.length} native failure{nativeFailedBindings.length > 1 ? "s" : ""}
         </span>
       )}
     </footer>

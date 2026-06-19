@@ -220,12 +220,12 @@ That state stays out of portable pack import/export on purpose.
 
 ### Save-to-slot
 1. Active window is resolved first.
-2. Native capture sends the preferred copy chord for the detected host and falls back to the alternate chord if the clipboard does not change.
-3. Bank A saves into the resolved workspace profile.
+2. SuperPaste samples the clipboard sequence number, fires the copy chord for the detected host strategy, and only accepts the capture if the clipboard actually changes.
+3. Bank A saves into the manual override profile first, then the last selected editor profile, then the resolved workspace profile as a fallback.
 4. Bank B saves into the global workflow profile by default.
 5. Existing slot metadata such as template mode and assembly role is preserved.
 6. Blank clipboard reads become an explicit no-op instead of overwriting a slot.
-7. Captured slots auto-queue by default through a renderer command, so the same hotkey path can build a combo stack.
+7. Captured slots can auto-queue immediately when the `autoQueueCaptures` setting is enabled, so the same hotkey path can build a combo stack.
 
 ### Manual smoke harness
 1. The main shell can open a dedicated test-harness window.
@@ -245,8 +245,9 @@ Passed:
 
 ## Current caveats
 
-- Direct slot paste/save hotkeys and combo finalize/cancel/replay hotkeys are native and route into the same renderer combo buffer.
+- Direct slot paste/save hotkeys and the combo finalize/cancel/replay hotkeys are native and route into the same renderer combo buffer.
 - Manual Windows foreground-app smoke is still recommended for last-mile proof in VS Code, Windows Terminal, and Notepad.
 - Clipboard restore currently preserves text clipboard contents only.
 - Native workspace-path matching is still weaker than title/process matching.
+- IDE-integrated terminals remain a gray area because the native foreground-window sampler still sees the IDE host process, not always the terminal pane itself.
 - `useSuperPasteApp` remains the biggest renderer-side file and is still the likeliest extraction candidate if another large UI pass lands.

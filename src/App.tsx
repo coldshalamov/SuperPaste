@@ -127,7 +127,7 @@ function MainShell() {
   }
 
   const isPaused = app.settings.panicModeEnabled;
-  const hasWarnings = app.hotkeyConflicts.length > 0;
+  const hasWarnings = app.hotkeyConflicts.length > 0 || app.runtime.degradedMode;
 
   return (
     <main className="app-shell">
@@ -264,6 +264,8 @@ function MainShell() {
         hotkeyWarnings={app.hotkeyConflicts.map(
           (conflict) => `${conflict.binding} (${conflict.reasons.join(", ")})`,
         )}
+        nativeFailedBindings={app.runtime.failedBindings}
+        nativeResolvedProfileReason={app.runtime.resolvedProfileReason || app.resolvedProfile.reason}
         isManualOverride={!!app.settings.activeProfileIdOverride}
       />
 
